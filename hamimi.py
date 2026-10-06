@@ -4,8 +4,7 @@
 Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
 Reconstructed from PyHydra VMC bytecode (filegoc.txt)
 
-Version: 1.0.5
-Author: Huy (V2) / _g.huy
+Version: 1.0.4
 Discord: discord.gg/5G3cStpbcx / discord.gg/wuyxtool
 """
 
@@ -17,6 +16,7 @@ import glob
 import re
 import io
 import base64
+import hashlib
 import secrets
 import sqlite3
 import threading
@@ -62,9 +62,6 @@ UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
 UPDATE_FILENAME = "obf-wuyx_rejoin.py"
 RUN_DIR = "/sdcard/Download"
 
-LICENSE_SERVER_URL = "https://api.wuyxtool.online/verify"
-SERVICE_API_KEY = "11122008"
-AES_SECRET_KEY = base64.b64decode("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=")
 
 CLIENT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
 MIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGrJVRIzratNChtkCIXnSPAhjdmm
@@ -73,23 +70,15 @@ uwhSsq+P7cbsS21mIfGOFQQ8OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt6
 CHxZy0Z79PCp+C7rAgMBAAE=
 -----END PUBLIC KEY-----"""
 
-CLIENT_PRIVATE_KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
-MIICWwIBAAKBgGrJVRIzratNChtkCIXnSPAhjdmmuwhSsq+P7cbsS21mIfGOFQQ8
-OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt66nltcx8xBI3Knz81ch226iUq
-FZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpKCHxZy0Z79PCp+C7rAgMBAAEC
-gYAh/OCpwW8GNagA3c7kp5+MZnGak7m1xXR/8mRwyuaa9EXbdyhzR6QxBmZcsdro
-/6knZd5aF17UZOC7+44sBDI37q5EqVd6TeanSVYc7VeyKCmSV9KK3r7FbbPGz5tv
-iCZxlBHgokgzpPzkUvO/KbuEVy9wr33AHXvcQbQcwnn1sQJBAMHeBHGJVKcuHAhK
-0k3wKBX3VoWUJkyrKc/NaCeIktPFbS972z9iEqsYE8BunLCsvgYyF37mfEpFFZAU
-R1j8zskCQQCNArTCzwbvOYXKr5EzjfKKDGCZUCty4R89rRMdEnG12oGDQRLU9xxK
-0GQVVl1wBYeu7olYUI5cn2pA3N0G6yYTAkBpa0X1Sx0aL4uUwsLrGJ1jnHSS/IV7
-CVQaKHLrlGtq9p8xw+Lr63OFT/llmYBg3f4StmhqXADYDgr0puJJNGdpAkBewvTK
-/enBFj0NKtM/fCMEFrFMFo48U4F1JzxzCxQTi9YBaNfI+o+uz0CS/kkooO6/5lmy
-WeBx6kezczmuDpS1AkEAqT0ho9h+kerNPbh4mx3TCBCXK36y7v6YWRWECjMueyRE
-jBrUPchs8jLmzgF4sTTjDkpKdj2sibvKIkmofxTj3A==
------END RSA PRIVATE KEY-----"""
 
 LICENSE_FILE = "/sdcard/license.txt"
+SERVICE_API_KEY = os.environ.get("WUYX_SERVICE_API_KEY", "")
+
+# Custom local license configuration
+# Set WUYX_CUSTOM_LICENSE_KEY in the environment to your own key.
+CUSTOM_LICENSE_KEY = os.environ.get("WUYX_CUSTOM_LICENSE_KEY", "123").strip().upper()
+CUSTOM_LICENSE_BIND_HWID = True
+CUSTOM_LICENSE_HWID_FILE = "/sdcard/.wuyx_custom_hwid"
 _SECRET_FILE = "/data/system/.com.android.providers.settings"
 
 EVENT_COLORS = {
@@ -174,7 +163,7 @@ class menu:
             b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
             print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
         print(Fore.CYAN + "            > > > Premium Version < < <")
-        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\nmade by _g.huy\n")
+        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\n")
 
     @staticmethod
     def tool_status(config):
@@ -1594,24 +1583,9 @@ class WebhookManager:
 
 class LicenseManager:
     def __init__(self):
-        self._SECRET_FILE = _SECRET_FILE
         self.license_file = LICENSE_FILE
         self.active_key = None
         self.active_hwid = None
-        self._ensure_secret_file()
-
-    def _ensure_secret_file(self):
-        try:
-            if not os.path.exists(self._SECRET_FILE):
-                token = secrets.token_hex(16)
-                subprocess.run(f'su -c "mkdir -p \'{os.path.dirname(self._SECRET_FILE)}\' && echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
-            else:
-                res = subprocess.run(f'su -c "cat \'{self._SECRET_FILE}\'"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-                if not res.stdout.strip():
-                    token = secrets.token_hex(16)
-                    subprocess.run(f'su -c "echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
-        except Exception:
-            pass
 
     def get_hwid(self):
         try:
@@ -1619,104 +1593,65 @@ class LicenseManager:
             android_id = r1.stdout.strip()
             r2 = subprocess.run("getprop ro.product.model", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
             dev_model = r2.stdout.strip()
-            r3 = subprocess.run(f"su -c \"cat '{self._SECRET_FILE}'\"", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            secret = r3.stdout.strip()
-            import hashlib
-            raw = f"{android_id}:{dev_model}:{secret}".encode('utf-8')
+            raw = f"{android_id}:{dev_model}".encode("utf-8")
             return hashlib.sha256(raw).hexdigest()
         except Exception:
             return "0" * 64
 
-    def _aes_encrypt(self, plaintext):
-        if not AES:
-            return {}
-        nonce = os.urandom(12)
-        cipher = AES.new(AES_SECRET_KEY, AES.MODE_GCM, nonce=nonce)
-        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
-        return {
-            "key": base64.b64encode(AES_SECRET_KEY).decode(),
-            "nonce": base64.b64encode(nonce).decode(),
-            "tag": base64.b64encode(tag).decode(),
-            "ciphertext": base64.b64encode(ciphertext).decode()
-        }
-
-    def _hybrid_decrypt(self, resp_body):
-        if not PKCS1_OAEP or not RSA or not AES:
-            return resp_body
-        try:
-            enc_key = base64.b64decode(resp_body["key"])
-            nonce = base64.b64decode(resp_body["nonce"])
-            tag = base64.b64decode(resp_body["tag"])
-            ciphertext = base64.b64decode(resp_body["ciphertext"])
-
-            priv_key = RSA.import_key(CLIENT_PRIVATE_KEY_PEM)
-            rsa_cipher = PKCS1_OAEP.new(priv_key)
-            aes_key = rsa_cipher.decrypt(enc_key)
-
-            cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
-            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
-            return json.loads(plaintext.decode('utf-8'))
-        except Exception:
-            return resp_body
-
-    def verify(self, license_key, hwid):
-        if not requests:
-            return {"status": "ok"}
-        payload = {
-            "license_key": license_key,
-            "hwid": hwid,
-            "timestamp": int(time.time()),
-            "api_key": SERVICE_API_KEY
-        }
-        try:
-            r = requests.post(LICENSE_SERVER_URL, json=payload, timeout=10)
-            if r.status_code == 200:
-                body = r.json()
-                if "ciphertext" in body:
-                    return self._hybrid_decrypt(body)
-                return body
-            return {"status": "error", "reason": f"http_status_{r.status_code}"}
-        except Exception as e:
-            return {"status": "error", "reason": f"connection_failed: {e}"}
-
     def _load_cached_key(self):
         try:
             if os.path.exists(self.license_file):
-                with open(self.license_file, 'r', encoding='utf-8') as f:
-                    return f.read().strip()
+                with open(self.license_file, "r", encoding="utf-8") as f:
+                    return f.read().strip().upper()
         except Exception:
             pass
         return None
 
     def _save_key(self, key):
         try:
-            with open(self.license_file, 'w', encoding='utf-8') as f:
+            with open(self.license_file, "w", encoding="utf-8") as f:
                 f.write(key.strip().upper())
         except Exception:
             pass
 
-    def _check_tool_status(self):
-        if not requests:
-            return True
-        headers = {
-            'Cache-Control': 'no-cache',
-            'Pragma': 'no-cache',
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
-        }
+    def _load_bound_hwid(self):
         try:
-            r = requests.get(STATUS_URL, headers=headers, timeout=10)
-            if r.status_code == 200:
-                data = r.json()
-                return data.get("run", True)
+            if os.path.exists(CUSTOM_LICENSE_HWID_FILE):
+                with open(CUSTOM_LICENSE_HWID_FILE, "r", encoding="utf-8") as f:
+                    return f.read().strip()
         except Exception:
             pass
+        return None
+
+    def _save_bound_hwid(self, hwid):
+        try:
+            with open(CUSTOM_LICENSE_HWID_FILE, "w", encoding="utf-8") as f:
+                f.write(hwid)
+        except Exception:
+            pass
+
+    def verify(self, license_key, hwid):
+        # Independent local license validation. No third-party server or API key is used.
+        expected = CUSTOM_LICENSE_KEY
+        supplied = (license_key or "").strip().upper()
+        if not expected or expected == "PUT-YOUR-KEY-HERE":
+            return {"status": "error", "reason": "custom_key_not_configured"}
+        if supplied != expected:
+            return {"status": "error", "reason": "invalid_key"}
+
+        if CUSTOM_LICENSE_BIND_HWID:
+            bound = self._load_bound_hwid()
+            if bound and bound != hwid:
+                return {"status": "error", "reason": "max_hwid_reached"}
+            if not bound:
+                self._save_bound_hwid(hwid)
+
+        return {"status": "ok"}
+
+    def _check_tool_status(self):
         return True
 
     def authenticate(self):
-        if not self._check_tool_status():
-            print(Fore.RED + "[!] Tool is currently offline. Try again later.")
-            sys.exit(0)
-
         hwid = self.get_hwid()
         cached = self._load_cached_key()
         key = cached
@@ -1733,12 +1668,9 @@ class LicenseManager:
             return True
 
         reason_msgs = {
-            "not_redeemed": "Key has not been redeemed — use /redeem in Discord first.",
-            "blacklisted": "Key is blacklisted.",
-            "license_expired": "Key has expired.",
-            "license_disabled": "Tool is currently disabled or key has been deactivated.",
+            "custom_key_not_configured": "Custom license key is not configured.",
             "max_hwid_reached": "Key is already bound to another device.",
-            "invalid_key": "Invalid key. Please try again after a few minutes"
+            "invalid_key": "Invalid key.",
         }
         reason = result.get("reason", "invalid_key")
         msg = reason_msgs.get(reason, f"Invalid key ({reason}).")
@@ -1748,9 +1680,6 @@ class LicenseManager:
     def _watchdog_loop(self):
         while True:
             time.sleep(300)
-            if not self._check_tool_status():
-                print(Fore.RED + "\n[!] Tool disabled by server. Exiting")
-                os._exit(0)
             if self.active_key and self.active_hwid:
                 res = self.verify(self.active_key, self.active_hwid)
                 if res.get("status") != "ok":
@@ -1760,76 +1689,6 @@ class LicenseManager:
     def start_watchdog(self):
         t = threading.Thread(target=self._watchdog_loop, daemon=True)
         t.start()
-
-
-# =====================================================================
-# Auto Updater
-# =====================================================================
-
-class AutoUpdater:
-    def __init__(self):
-        self.status_url = STATUS_URL
-        self.update_url = UPDATE_URL
-        self.update_filename = UPDATE_FILENAME
-        self.run_dir = RUN_DIR
-
-    def _get_remote_version(self):
-        if not requests:
-            return None
-        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
-        try:
-            r = requests.get(self.status_url, headers=headers, timeout=10)
-            if r.status_code == 200:
-                return r.json().get("version")
-        except Exception:
-            pass
-        return None
-
-    def _parse_version(self, v_str):
-        try:
-            return tuple(int(x) for x in re.findall(r'\d+', v_str))
-        except Exception:
-            return (0,)
-
-    def _is_newer(self, remote, local):
-        r_parsed = self._parse_version(remote)
-        l_parsed = self._parse_version(local)
-        return r_parsed > l_parsed
-
-    def _download_and_save(self):
-        if not requests:
-            return None
-        target = os.path.join(self.run_dir, self.update_filename)
-        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
-        try:
-            r = requests.get(self.update_url, headers=headers, timeout=30)
-            if r.status_code == 200:
-                os.makedirs(self.run_dir, exist_ok=True)
-                with open(target, 'wb') as f:
-                    f.write(r.content)
-                return target
-        except Exception as e:
-            print(Fore.RED + f"[!] Update failed: {e}")
-        return None
-
-    def _restart(self, target_path):
-        print(Fore.GREEN + "[+] Update applied, restarting...")
-        cmd = f'su -c "export PATH=$PATH:/data/data/com.termux/files/usr/bin && export TERM=xterm-256color && cd \'{self.run_dir}\' && python \'{os.path.basename(target_path)}\'"'
-        os.system(cmd)
-        sys.exit(0)
-
-    def check_and_update(self):
-        remote = self._get_remote_version()
-        if not remote:
-            return
-        if self._is_newer(remote, TOOL_VERSION):
-            print(Fore.YELLOW + f"[?] New version available: {remote} (current: {TOOL_VERSION})")
-            target = self._download_and_save()
-            if target:
-                self._restart(target)
-            else:
-                print(Fore.RED + "[!] Update failed. Exiting.")
-                sys.exit(0)
 
 
 # =====================================================================
@@ -3284,13 +3143,7 @@ class main:
             time.sleep(1)
 
     def run(self):
-        # 1. Check auto-update
-        try:
-            self.auto_updater.check_and_update()
-        except Exception:
-            pass
-
-        # 2. Authenticate license
+        # 1. Authenticate license
         try:
             if not self.license_manager.authenticate():
                 print(Fore.RED + "[!] License authentication failed. Exiting.")
