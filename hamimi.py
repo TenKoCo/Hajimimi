@@ -77,7 +77,7 @@ SERVICE_API_KEY = os.environ.get("WUYX_SERVICE_API_KEY", "")
 # Custom local license configuration
 # Set WUYX_CUSTOM_LICENSE_KEY in the environment to your own key.
 CUSTOM_LICENSE_KEY = os.environ.get("WUYX_CUSTOM_LICENSE_KEY", "123").strip().upper()
-CUSTOM_LICENSE_BIND_HWID = True
+CUSTOM_LICENSE_BIND_HWID = False
 CUSTOM_LICENSE_HWID_FILE = "/sdcard/.wuyx_custom_hwid"
 _SECRET_FILE = "/data/system/.com.android.providers.settings"
 
@@ -1652,12 +1652,9 @@ class LicenseManager:
         return True
 
     def authenticate(self):
+        # Always use the configured custom key; do not reuse a stale old license file.
         hwid = self.get_hwid()
-        cached = self._load_cached_key()
-        key = cached
-
-        if not key:
-            key = input(Fore.CYAN + "[?] Enter license key: ").strip().upper()
+        key = CUSTOM_LICENSE_KEY
 
         result = self.verify(key, hwid)
         if result.get("status") == "ok":
