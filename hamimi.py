@@ -4,7 +4,7 @@
 Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
 Reconstructed from PyHydra VMC bytecode (filegoc.txt)
 
-Version: 1.0.5
+Version: 1.0.4
 Discord: discord.gg/5G3cStpbcx / discord.gg/wuyxtool
 """
 
@@ -56,7 +56,7 @@ except ImportError:
 # Constants & Configuration
 # =====================================================================
 
-TOOL_VERSION = "1.0.5"
+TOOL_VERSION = "1.0.4"
 STATUS_URL = "https://api.wuyxtool.online/public/status.json"
 UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
 UPDATE_FILENAME = "obf-wuyx_rejoin.py"
@@ -1708,7 +1708,6 @@ class main:
         self.acc_manager = AccountManager()
         self.webhook_manager = WebhookManager(self.config_manager, self.pkg_manager, self.acc_manager)
         self.license_manager = LicenseManager()
-        self.auto_updater = AutoUpdater()
 
         self.tabs_status = []
         self._kill_lock = threading.Lock()
