@@ -5,7 +5,6 @@ Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
 Reconstructed from PyHydra VMC bytecode (filegoc.txt)
 
 Version: 1.0.4
-Discord: discord.gg/5G3cStpbcx / discord.gg/wuyxtool
 """
 
 import os
@@ -16,7 +15,6 @@ import glob
 import re
 import io
 import base64
-import hashlib
 import secrets
 import sqlite3
 import threading
@@ -43,43 +41,12 @@ except ImportError:
     Fore = DummyColor()
     Style = DummyColor()
 
-try:
-    from Crypto.Cipher import AES, PKCS1_OAEP
-    from Crypto.PublicKey import RSA
-except ImportError:
-    AES = None
-    PKCS1_OAEP = None
-    RSA = None
-
 
 # =====================================================================
 # Constants & Configuration
 # =====================================================================
 
-TOOL_VERSION = "1.0.4"
-STATUS_URL = "https://api.wuyxtool.online/public/status.json"
-UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
-UPDATE_FILENAME = "obf-wuyx_rejoin.py"
-RUN_DIR = "/sdcard/Download"
-
-
-CLIENT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGrJVRIzratNChtkCIXnSPAhjdmm
-uwhSsq+P7cbsS21mIfGOFQQ8OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt6
-6nltcx8xBI3Knz81ch226iUqFZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpK
-CHxZy0Z79PCp+C7rAgMBAAE=
------END PUBLIC KEY-----"""
-
-
-LICENSE_FILE = "/sdcard/license.txt"
-SERVICE_API_KEY = os.environ.get("WUYX_SERVICE_API_KEY", "")
-
-# Custom local license configuration
-# Set WUYX_CUSTOM_LICENSE_KEY in the environment to your own key.
-CUSTOM_LICENSE_KEY = os.environ.get("WUYX_CUSTOM_LICENSE_KEY", "123").strip().upper()
-CUSTOM_LICENSE_BIND_HWID = False
-CUSTOM_LICENSE_HWID_FILE = "/sdcard/.wuyx_custom_hwid"
-_SECRET_FILE = "/data/system/.com.android.providers.settings"
+TOOL_KEY = "123"
 
 EVENT_COLORS = {
     'Captcha': 16777179,
@@ -163,7 +130,7 @@ class menu:
             b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
             print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
         print(Fore.CYAN + "            > > > Premium Version < < <")
-        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\n")
+        print()
 
     @staticmethod
     def tool_status(config):
@@ -423,7 +390,7 @@ class ConfigManager:
             wuyx_dir = os.path.join(w_dir, 'Wuyx')
             try:
                 os.makedirs(wuyx_dir, exist_ok=True)
-                cfg_path = os.path.join(wuyx_dir, 'config.json')
+                cfg_path = os.path.join(w_dir, 'Wuyx', 'config.json')
                 data = {}
                 if os.path.exists(cfg_path):
                     try:
@@ -700,7 +667,6 @@ class PackageManager:
     <int name="app_cloner_minimized_point_x" value="{l}" />
     <int name="app_cloner_minimized_point_y" value="{t}" />
 """
-            # Write via root shell
             cmd = f'su -c "cat \'{pref_file}\'"'
             res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
             if res.returncode == 0 and '<map>' in res.stdout:
@@ -721,7 +687,6 @@ class PackageManager:
                 self._write_window_coords(pkg, (0, 0, w, h))
             return
 
-        # Grid calculation
         cols = 2 if n <= 4 else 3
         rows = (n + cols - 1) // cols
         cell_w = w // cols
@@ -755,17 +720,7 @@ class AccountManager:
         self.session = requests.Session() if requests else None
 
     def genlink_delta(self, hwid):
-        if not requests:
-            return None
-        url = "https://api.wuyxtool.online/bypass"
-        try:
-            resp = requests.post(url, json={"hwid": hwid, "api_key": SERVICE_API_KEY}, timeout=15)
-            if resp.status_code == 200:
-                data = resp.json()
-                if data.get("status") == "success":
-                    return data.get("result")
-        except Exception:
-            pass
+        # api.wuyxtool.online removed — Delta auto-bypass disabled, returns fail
         return None
 
     def get_hwid_delta(self, package):
@@ -816,7 +771,7 @@ class AccountManager:
                 return True
         return True
 
-    def autoexecute(self, package, script):
+    def autoexecute(self, package, script, filename='script.lua'):
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -824,7 +779,7 @@ class AccountManager:
         for d in dirs:
             try:
                 os.makedirs(d, exist_ok=True)
-                with open(os.path.join(d, 'script.lua'), 'w', encoding='utf-8') as f:
+                with open(os.path.join(d, filename), 'w', encoding='utf-8') as f:
                     f.write(script)
             except Exception:
                 pass
@@ -994,7 +949,6 @@ class AccountManager:
             if r.status_code == 401:
                 return "dead"
             if r.status_code == 403:
-                # Could be ban or captcha
                 txt = r.text.lower()
                 if 'captcha' in txt:
                     return "captcha"
@@ -1125,7 +1079,6 @@ class AccountManager:
                 conn.close()
                 return "updated"
             else:
-                # Inspect table schema
                 c.execute("PRAGMA table_info(cookies)")
                 cols = [row[1] for row in c.fetchall()]
                 ins_cols = ["creation_utc", "host_key", "top_frame_site_key", "name", "value", "path", "expires_utc",
@@ -1171,7 +1124,6 @@ class AccountManager:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             'Accept': 'application/json'
         }
-        # First get csrf token
         csrf = None
         try:
             r = requests.post("https://auth.roblox.com/v2/logout", headers=headers, timeout=5)
@@ -1398,11 +1350,6 @@ class WebhookManager:
                         {"name": "💾 Total ram usage", "value": f"`{ram_str}`", "inline": True},
                         {"name": "📊 Application Details", "value": tab_details, "inline": False}
                     ],
-                    "author": {
-                        "name": "Wuyx Rejoin",
-                        "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
-                    },
-                    "footer": {"text": "discord.gg/wuyxtool"},
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 try:
@@ -1433,11 +1380,6 @@ class WebhookManager:
                 {"name": "📅 Account Created", "value": f"`{created}`", "inline": True},
                 {"name": "🔑 Cookie (.ROBLOSECURITY)", "value": f"```{cookie[:50]}…```", "inline": False}
             ],
-            "author": {
-                "name": "Wuyx Rejoin",
-                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
-            },
-            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1466,11 +1408,6 @@ class WebhookManager:
                 {"name": "📦 Package", "value": f"`{package}`", "inline": True},
                 {"name": "📝 Details", "value": detail or "N/A", "inline": False}
             ],
-            "author": {
-                "name": "Wuyx Rejoin",
-                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
-            },
-            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1500,11 +1437,6 @@ class WebhookManager:
                 {"name": "🔔 Reason", "value": reason or "N/A", "inline": True},
                 {"name": "📦 Package", "value": f"`{pkg}`", "inline": True}
             ],
-            "author": {
-                "name": "Wuyx Rejoin",
-                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
-            },
-            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if new_avatar:
@@ -1526,11 +1458,6 @@ class WebhookManager:
         embed = {
             "description": f"Successfully extracted **{total}** cookies.",
             "color": 3447003,
-            "author": {
-                "name": "Wuyx Rejoin",
-                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
-            },
-            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         try:
@@ -1578,117 +1505,6 @@ class WebhookManager:
 
 
 # =====================================================================
-# License Manager
-# =====================================================================
-
-class LicenseManager:
-    def __init__(self):
-        self.license_file = LICENSE_FILE
-        self.active_key = None
-        self.active_hwid = None
-
-    def get_hwid(self):
-        try:
-            r1 = subprocess.run("settings get secure android_id", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            android_id = r1.stdout.strip()
-            r2 = subprocess.run("getprop ro.product.model", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-            dev_model = r2.stdout.strip()
-            raw = f"{android_id}:{dev_model}".encode("utf-8")
-            return hashlib.sha256(raw).hexdigest()
-        except Exception:
-            return "0" * 64
-
-    def _load_cached_key(self):
-        try:
-            if os.path.exists(self.license_file):
-                with open(self.license_file, "r", encoding="utf-8") as f:
-                    return f.read().strip().upper()
-        except Exception:
-            pass
-        return None
-
-    def _save_key(self, key):
-        try:
-            with open(self.license_file, "w", encoding="utf-8") as f:
-                f.write(key.strip().upper())
-        except Exception:
-            pass
-
-    def _load_bound_hwid(self):
-        try:
-            if os.path.exists(CUSTOM_LICENSE_HWID_FILE):
-                with open(CUSTOM_LICENSE_HWID_FILE, "r", encoding="utf-8") as f:
-                    return f.read().strip()
-        except Exception:
-            pass
-        return None
-
-    def _save_bound_hwid(self, hwid):
-        try:
-            with open(CUSTOM_LICENSE_HWID_FILE, "w", encoding="utf-8") as f:
-                f.write(hwid)
-        except Exception:
-            pass
-
-    def verify(self, license_key, hwid):
-        # Independent local license validation. No third-party server or API key is used.
-        expected = CUSTOM_LICENSE_KEY
-        supplied = (license_key or "").strip().upper()
-        if not expected or expected == "PUT-YOUR-KEY-HERE":
-            return {"status": "error", "reason": "custom_key_not_configured"}
-        if supplied != expected:
-            return {"status": "error", "reason": "invalid_key"}
-
-        if CUSTOM_LICENSE_BIND_HWID:
-            bound = self._load_bound_hwid()
-            if bound and bound != hwid:
-                return {"status": "error", "reason": "max_hwid_reached"}
-            if not bound:
-                self._save_bound_hwid(hwid)
-
-        return {"status": "ok"}
-
-    def _check_tool_status(self):
-        return True
-
-    def authenticate(self):
-        # Always use the configured custom key; do not reuse a stale old license file.
-        hwid = self.get_hwid()
-        key = CUSTOM_LICENSE_KEY
-
-        result = self.verify(key, hwid)
-        if result.get("status") == "ok":
-            self.active_key = key
-            self.active_hwid = hwid
-            self._save_key(key)
-            print(Fore.GREEN + "[+] Activated")
-            return True
-
-        reason_msgs = {
-            "custom_key_not_configured": "Custom license key is not configured.",
-            "max_hwid_reached": "Key is already bound to another device.",
-            "invalid_key": "Invalid key.",
-        }
-        reason = result.get("reason", "invalid_key")
-        msg = reason_msgs.get(reason, f"Invalid key ({reason}).")
-        print(Fore.RED + f"[!] {msg}")
-        return False
-
-    def _watchdog_loop(self):
-        while True:
-            time.sleep(300)
-            if self.active_key and self.active_hwid:
-                res = self.verify(self.active_key, self.active_hwid)
-                if res.get("status") != "ok":
-                    print(Fore.RED + f"\n[!] License verification failed: {res.get('reason')}. Exiting")
-                    os._exit(0)
-
-    def start_watchdog(self):
-        t = threading.Thread(target=self._watchdog_loop, daemon=True)
-        t.start()
-
-
-# =====================================================================
 # Main Application Controller
 # =====================================================================
 
@@ -1704,7 +1520,6 @@ class main:
         self.pkg_manager = PackageManager()
         self.acc_manager = AccountManager()
         self.webhook_manager = WebhookManager(self.config_manager, self.pkg_manager, self.acc_manager)
-        self.license_manager = LicenseManager()
 
         self.tabs_status = []
         self._kill_lock = threading.Lock()
@@ -1727,6 +1542,28 @@ class main:
         self._all_tabs = {}
         self._delta_key_fetching = set()
         self._oom_started = set()
+
+    def _check_key(self):
+        """Cổng key local — nhập đúng TOOL_KEY một lần, nhớ qua Wuyx/.key_ok"""
+        key_file = os.path.join(self.work_dir, ".key_ok")
+        if os.path.exists(key_file):
+            return True
+        try:
+            key = input(Fore.CYAN + "[?] Enter key: ").strip()
+        except (KeyboardInterrupt, EOFError):
+            print()
+            return False
+        if key == TOOL_KEY:
+            try:
+                os.makedirs(self.work_dir, exist_ok=True)
+                with open(key_file, 'w', encoding='utf-8') as f:
+                    f.write('1')
+            except Exception:
+                pass
+            print(Fore.GREEN + "[+] Key accepted")
+            return True
+        print(Fore.RED + "[!] Wrong key. Exiting.")
+        return False
 
     def _extract_cookie_from_line(self, line):
         if not line:
@@ -2024,7 +1861,7 @@ class main:
             if pkg in cfg["tabs"]:
                 cfg["tabs"][pkg]["user_name"] = new_uname
                 cfg["tabs"][pkg]["user_id"] = new_uid
-                self.config_manager.save_config(self.config_manager.config_file, cfg)
+                self.config_manager.save_config(self.config_file, cfg)
 
             # Kill and relaunch Roblox
             self.pkg_manager.kill_roblox_process(pkg)
@@ -2074,26 +1911,6 @@ class main:
             rs = reason
         t = threading.Thread(target=self._do_change_account, args=(pkg, t_obj, rs), daemon=True)
         t.start()
-
-    def event_tracking(self):
-        try:
-            flag_file = '/sdcard/.w.txt'
-            if os.path.exists(flag_file):
-                return
-            android_id = self.pkg_manager.get_android_id()
-            try:
-                from logsnag import LogSnag
-                logger = LogSnag(token='df0e441f0e4069146d1ec37c42908783', project='wuyx-rejoin-')
-                logger.track(channel='user', event='user logging tool', user_id=android_id, icon='🚀', notify=True)
-            except Exception:
-                pass
-            try:
-                with open(flag_file, 'w') as f:
-                    f.write('1')
-            except Exception:
-                pass
-        except Exception:
-            pass
 
     def _render_status(self):
         cfg = self.config_manager.load_config()
@@ -2492,9 +2309,6 @@ class main:
                             print(Fore.GREEN + f" [+] Private created: {vip_link}")
             self.config_manager.save_config(self.config_file, cfg)
             print(Fore.GREEN + "[+] Auto buy private done")
-
-        # Event tracking telemetry
-        self.event_tracking()
 
         # Auto sort tab if enabled
         if cfg.get("auto_sort_tab"):
@@ -3139,25 +2953,20 @@ class main:
             time.sleep(1)
 
     def run(self):
-        # 1. Authenticate license
-        try:
-            if not self.license_manager.authenticate():
-                print(Fore.RED + "[!] License authentication failed. Exiting.")
-                return
-            self.license_manager.start_watchdog()
-        except Exception as e:
-            print(Fore.YELLOW + f"[~] License check bypassed / offline mode: {e}")
+        # 1. Key check
+        if not self._check_key():
+            return
 
-        # 3. Initialize workspace
+        # 2. Initialize workspace
         self.config_manager.init_work_space()
         cfg = self.config_manager.load_config()
         self.pkg_manager.auto_clean_missing_packages(cfg)
 
-        # 4. Auto-start webhook if configured
+        # 3. Auto-start webhook if configured
         if cfg.get("discord_webhook", {}).get("running", False):
             self.webhook_manager.start_webhook()
 
-        # 5. Main menu loop
+        # 4. Main menu loop
         while True:
             menu.banner()
             menu.tool_status(cfg)
