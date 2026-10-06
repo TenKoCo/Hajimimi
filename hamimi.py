@@ -4,7 +4,9 @@
 Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
 Reconstructed from PyHydra VMC bytecode (filegoc.txt)
 
-Version: 1.0.4
+Version: 1.0.5
+Author: Huy (V2) / _g.huy
+Discord: discord.gg/5G3cStpbcx / discord.gg/wuyxtool
 """
 
 import os
@@ -41,10 +43,54 @@ except ImportError:
     Fore = DummyColor()
     Style = DummyColor()
 
+try:
+    from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
+except ImportError:
+    AES = None
+    PKCS1_OAEP = None
+    RSA = None
+
 
 # =====================================================================
 # Constants & Configuration
 # =====================================================================
+
+TOOL_VERSION = "1.0.4"
+STATUS_URL = "https://api.wuyxtool.online/public/status.json"
+UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
+UPDATE_FILENAME = "obf-wuyx_rejoin.py"
+RUN_DIR = "/sdcard/Download"
+
+LICENSE_SERVER_URL = "https://api.wuyxtool.online/verify"
+SERVICE_API_KEY = "11122008"
+AES_SECRET_KEY = base64.b64decode("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=")
+
+CLIENT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGrJVRIzratNChtkCIXnSPAhjdmm
+uwhSsq+P7cbsS21mIfGOFQQ8OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt6
+6nltcx8xBI3Knz81ch226iUqFZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpK
+CHxZy0Z79PCp+C7rAgMBAAE=
+-----END PUBLIC KEY-----"""
+
+CLIENT_PRIVATE_KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
+MIICWwIBAAKBgGrJVRIzratNChtkCIXnSPAhjdmmuwhSsq+P7cbsS21mIfGOFQQ8
+OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt66nltcx8xBI3Knz81ch226iUq
+FZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpKCHxZy0Z79PCp+C7rAgMBAAEC
+gYAh/OCpwW8GNagA3c7kp5+MZnGak7m1xXR/8mRwyuaa9EXbdyhzR6QxBmZcsdro
+/6knZd5aF17UZOC7+44sBDI37q5EqVd6TeanSVYc7VeyKCmSV9KK3r7FbbPGz5tv
+iCZxlBHgokgzpPzkUvO/KbuEVy9wr33AHXvcQbQcwnn1sQJBAMHeBHGJVKcuHAhK
+0k3wKBX3VoWUJkyrKc/NaCeIktPFbS972z9iEqsYE8BunLCsvgYyF37mfEpFFZAU
+R1j8zskCQQCNArTCzwbvOYXKr5EzjfKKDGCZUCty4R89rRMdEnG12oGDQRLU9xxK
+0GQVVl1wBYeu7olYUI5cn2pA3N0G6yYTAkBpa0X1Sx0aL4uUwsLrGJ1jnHSS/IV7
+CVQaKHLrlGtq9p8xw+Lr63OFT/llmYBg3f4StmhqXADYDgr0puJJNGdpAkBewvTK
+/enBFj0NKtM/fCMEFrFMFo48U4F1JzxzCxQTi9YBaNfI+o+uz0CS/kkooO6/5lmy
+WeBx6kezczmuDpS1AkEAqT0ho9h+kerNPbh4mx3TCBCXK36y7v6YWRWECjMueyRE
+jBrUPchs8jLmzgF4sTTjDkpKdj2sibvKIkmofxTj3A==
+-----END RSA PRIVATE KEY-----"""
+
+LICENSE_FILE = "/sdcard/license.txt"
+_SECRET_FILE = "/data/system/.com.android.providers.settings"
 
 EVENT_COLORS = {
     'Captcha': 16777179,
@@ -104,7 +150,7 @@ class menu:
         os.system('cls' if os.name == 'nt' else 'clear')
         raw_banner = """
     ██╗    ██╗██╗   ██╗██╗   ██╗██╗  ██╗          
-    ██╗    ██║██║   ██║╚██╗ ██╔╝╚██╗██╔╝          
+    ██║    ██║██║   ██║╚██╗ ██╔╝╚██╗██╔╝          
     ██║ █╗ ██║██║   ██║ ╚████╔╝  ╚███╔╝           
     ██║███╗██║██║   ██║  ╚██╔╝   ██╔██╗           
     ╚███╔███╔╝╚██████╔╝   ██║   ██╔╝ ██╗          
@@ -128,7 +174,7 @@ class menu:
             b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
             print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
         print(Fore.CYAN + "            > > > Premium Version < < <")
-        print()
+        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\nmade by _g.huy\n")
 
     @staticmethod
     def tool_status(config):
@@ -388,7 +434,7 @@ class ConfigManager:
             wuyx_dir = os.path.join(w_dir, 'Wuyx')
             try:
                 os.makedirs(wuyx_dir, exist_ok=True)
-                cfg_path = os.path.join(w_dir, 'Wuyx', 'config.json')
+                cfg_path = os.path.join(wuyx_dir, 'config.json')
                 data = {}
                 if os.path.exists(cfg_path):
                     try:
@@ -665,6 +711,7 @@ class PackageManager:
     <int name="app_cloner_minimized_point_x" value="{l}" />
     <int name="app_cloner_minimized_point_y" value="{t}" />
 """
+            # Write via root shell
             cmd = f'su -c "cat \'{pref_file}\'"'
             res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
             if res.returncode == 0 and '<map>' in res.stdout:
@@ -685,6 +732,7 @@ class PackageManager:
                 self._write_window_coords(pkg, (0, 0, w, h))
             return
 
+        # Grid calculation
         cols = 2 if n <= 4 else 3
         rows = (n + cols - 1) // cols
         cell_w = w // cols
@@ -718,7 +766,17 @@ class AccountManager:
         self.session = requests.Session() if requests else None
 
     def genlink_delta(self, hwid):
-        # api.wuyxtool.online removed — Delta auto-bypass disabled, returns fail
+        if not requests:
+            return None
+        url = "https://api.wuyxtool.online/bypass"
+        try:
+            resp = requests.post(url, json={"hwid": hwid, "api_key": SERVICE_API_KEY}, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "success":
+                    return data.get("result")
+        except Exception:
+            pass
         return None
 
     def get_hwid_delta(self, package):
@@ -769,7 +827,7 @@ class AccountManager:
                 return True
         return True
 
-    def autoexecute(self, package, script, filename='script.lua'):
+    def autoexecute(self, package, script):
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -777,7 +835,7 @@ class AccountManager:
         for d in dirs:
             try:
                 os.makedirs(d, exist_ok=True)
-                with open(os.path.join(d, filename), 'w', encoding='utf-8') as f:
+                with open(os.path.join(d, 'script.lua'), 'w', encoding='utf-8') as f:
                     f.write(script)
             except Exception:
                 pass
@@ -947,6 +1005,7 @@ class AccountManager:
             if r.status_code == 401:
                 return "dead"
             if r.status_code == 403:
+                # Could be ban or captcha
                 txt = r.text.lower()
                 if 'captcha' in txt:
                     return "captcha"
@@ -1077,6 +1136,7 @@ class AccountManager:
                 conn.close()
                 return "updated"
             else:
+                # Inspect table schema
                 c.execute("PRAGMA table_info(cookies)")
                 cols = [row[1] for row in c.fetchall()]
                 ins_cols = ["creation_utc", "host_key", "top_frame_site_key", "name", "value", "path", "expires_utc",
@@ -1122,6 +1182,7 @@ class AccountManager:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             'Accept': 'application/json'
         }
+        # First get csrf token
         csrf = None
         try:
             r = requests.post("https://auth.roblox.com/v2/logout", headers=headers, timeout=5)
@@ -1348,6 +1409,11 @@ class WebhookManager:
                         {"name": "💾 Total ram usage", "value": f"`{ram_str}`", "inline": True},
                         {"name": "📊 Application Details", "value": tab_details, "inline": False}
                     ],
+                    "author": {
+                        "name": "Wuyx Rejoin",
+                        "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+                    },
+                    "footer": {"text": "discord.gg/wuyxtool"},
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 try:
@@ -1378,6 +1444,11 @@ class WebhookManager:
                 {"name": "📅 Account Created", "value": f"`{created}`", "inline": True},
                 {"name": "🔑 Cookie (.ROBLOSECURITY)", "value": f"```{cookie[:50]}…```", "inline": False}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1406,6 +1477,11 @@ class WebhookManager:
                 {"name": "📦 Package", "value": f"`{package}`", "inline": True},
                 {"name": "📝 Details", "value": detail or "N/A", "inline": False}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1435,6 +1511,11 @@ class WebhookManager:
                 {"name": "🔔 Reason", "value": reason or "N/A", "inline": True},
                 {"name": "📦 Package", "value": f"`{pkg}`", "inline": True}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if new_avatar:
@@ -1456,6 +1537,11 @@ class WebhookManager:
         embed = {
             "description": f"Successfully extracted **{total}** cookies.",
             "color": 3447003,
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         try:
@@ -1503,6 +1589,250 @@ class WebhookManager:
 
 
 # =====================================================================
+# License Manager
+# =====================================================================
+
+class LicenseManager:
+    def __init__(self):
+        self._SECRET_FILE = _SECRET_FILE
+        self.license_file = LICENSE_FILE
+        self.active_key = None
+        self.active_hwid = None
+        self._ensure_secret_file()
+
+    def _ensure_secret_file(self):
+        try:
+            if not os.path.exists(self._SECRET_FILE):
+                token = secrets.token_hex(16)
+                subprocess.run(f'su -c "mkdir -p \'{os.path.dirname(self._SECRET_FILE)}\' && echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+            else:
+                res = subprocess.run(f'su -c "cat \'{self._SECRET_FILE}\'"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                if not res.stdout.strip():
+                    token = secrets.token_hex(16)
+                    subprocess.run(f'su -c "echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+
+    def get_hwid(self):
+        try:
+            r1 = subprocess.run("settings get secure android_id", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            android_id = r1.stdout.strip()
+            r2 = subprocess.run("getprop ro.product.model", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            dev_model = r2.stdout.strip()
+            r3 = subprocess.run(f"su -c \"cat '{self._SECRET_FILE}'\"", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            secret = r3.stdout.strip()
+            import hashlib
+            raw = f"{android_id}:{dev_model}:{secret}".encode('utf-8')
+            return hashlib.sha256(raw).hexdigest()
+        except Exception:
+            return "0" * 64
+
+    def _aes_encrypt(self, plaintext):
+        if not AES:
+            return {}
+        nonce = os.urandom(12)
+        cipher = AES.new(AES_SECRET_KEY, AES.MODE_GCM, nonce=nonce)
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+        return {
+            "key": base64.b64encode(AES_SECRET_KEY).decode(),
+            "nonce": base64.b64encode(nonce).decode(),
+            "tag": base64.b64encode(tag).decode(),
+            "ciphertext": base64.b64encode(ciphertext).decode()
+        }
+
+    def _hybrid_decrypt(self, resp_body):
+        if not PKCS1_OAEP or not RSA or not AES:
+            return resp_body
+        try:
+            enc_key = base64.b64decode(resp_body["key"])
+            nonce = base64.b64decode(resp_body["nonce"])
+            tag = base64.b64decode(resp_body["tag"])
+            ciphertext = base64.b64decode(resp_body["ciphertext"])
+
+            priv_key = RSA.import_key(CLIENT_PRIVATE_KEY_PEM)
+            rsa_cipher = PKCS1_OAEP.new(priv_key)
+            aes_key = rsa_cipher.decrypt(enc_key)
+
+            cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+            return json.loads(plaintext.decode('utf-8'))
+        except Exception:
+            return resp_body
+
+    def verify(self, license_key, hwid):
+        if not requests:
+            return {"status": "ok"}
+        payload = {
+            "license_key": license_key,
+            "hwid": hwid,
+            "timestamp": int(time.time()),
+            "api_key": SERVICE_API_KEY
+        }
+        try:
+            r = requests.post(LICENSE_SERVER_URL, json=payload, timeout=10)
+            if r.status_code == 200:
+                body = r.json()
+                if "ciphertext" in body:
+                    return self._hybrid_decrypt(body)
+                return body
+            return {"status": "error", "reason": f"http_status_{r.status_code}"}
+        except Exception as e:
+            return {"status": "error", "reason": f"connection_failed: {e}"}
+
+    def _load_cached_key(self):
+        try:
+            if os.path.exists(self.license_file):
+                with open(self.license_file, 'r', encoding='utf-8') as f:
+                    return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def _save_key(self, key):
+        try:
+            with open(self.license_file, 'w', encoding='utf-8') as f:
+                f.write(key.strip().upper())
+        except Exception:
+            pass
+
+    def _check_tool_status(self):
+        if not requests:
+            return True
+        headers = {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        try:
+            r = requests.get(STATUS_URL, headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("run", True)
+        except Exception:
+            pass
+        return True
+
+    def authenticate(self):
+        if not self._check_tool_status():
+            print(Fore.RED + "[!] Tool is currently offline. Try again later.")
+            sys.exit(0)
+
+        hwid = self.get_hwid()
+        cached = self._load_cached_key()
+        key = cached
+
+        if not key:
+            key = input(Fore.CYAN + "[?] Enter license key: ").strip().upper()
+
+        result = self.verify(key, hwid)
+        if result.get("status") == "ok":
+            self.active_key = key
+            self.active_hwid = hwid
+            self._save_key(key)
+            print(Fore.GREEN + "[+] Activated")
+            return True
+
+        reason_msgs = {
+            "not_redeemed": "Key has not been redeemed — use /redeem in Discord first.",
+            "blacklisted": "Key is blacklisted.",
+            "license_expired": "Key has expired.",
+            "license_disabled": "Tool is currently disabled or key has been deactivated.",
+            "max_hwid_reached": "Key is already bound to another device.",
+            "invalid_key": "Invalid key. Please try again after a few minutes"
+        }
+        reason = result.get("reason", "invalid_key")
+        msg = reason_msgs.get(reason, f"Invalid key ({reason}).")
+        print(Fore.RED + f"[!] {msg}")
+        return False
+
+    def _watchdog_loop(self):
+        while True:
+            time.sleep(300)
+            if not self._check_tool_status():
+                print(Fore.RED + "\n[!] Tool disabled by server. Exiting")
+                os._exit(0)
+            if self.active_key and self.active_hwid:
+                res = self.verify(self.active_key, self.active_hwid)
+                if res.get("status") != "ok":
+                    print(Fore.RED + f"\n[!] License verification failed: {res.get('reason')}. Exiting")
+                    os._exit(0)
+
+    def start_watchdog(self):
+        t = threading.Thread(target=self._watchdog_loop, daemon=True)
+        t.start()
+
+
+# =====================================================================
+# Auto Updater
+# =====================================================================
+
+class AutoUpdater:
+    def __init__(self):
+        self.status_url = STATUS_URL
+        self.update_url = UPDATE_URL
+        self.update_filename = UPDATE_FILENAME
+        self.run_dir = RUN_DIR
+
+    def _get_remote_version(self):
+        if not requests:
+            return None
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.status_url, headers=headers, timeout=10)
+            if r.status_code == 200:
+                return r.json().get("version")
+        except Exception:
+            pass
+        return None
+
+    def _parse_version(self, v_str):
+        try:
+            return tuple(int(x) for x in re.findall(r'\d+', v_str))
+        except Exception:
+            return (0,)
+
+    def _is_newer(self, remote, local):
+        r_parsed = self._parse_version(remote)
+        l_parsed = self._parse_version(local)
+        return r_parsed > l_parsed
+
+    def _download_and_save(self):
+        if not requests:
+            return None
+        target = os.path.join(self.run_dir, self.update_filename)
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.update_url, headers=headers, timeout=30)
+            if r.status_code == 200:
+                os.makedirs(self.run_dir, exist_ok=True)
+                with open(target, 'wb') as f:
+                    f.write(r.content)
+                return target
+        except Exception as e:
+            print(Fore.RED + f"[!] Update failed: {e}")
+        return None
+
+    def _restart(self, target_path):
+        print(Fore.GREEN + "[+] Update applied, restarting...")
+        cmd = f'su -c "export PATH=$PATH:/data/data/com.termux/files/usr/bin && export TERM=xterm-256color && cd \'{self.run_dir}\' && python \'{os.path.basename(target_path)}\'"'
+        os.system(cmd)
+        sys.exit(0)
+
+    def check_and_update(self):
+        remote = self._get_remote_version()
+        if not remote:
+            return
+        if self._is_newer(remote, TOOL_VERSION):
+            print(Fore.YELLOW + f"[?] New version available: {remote} (current: {TOOL_VERSION})")
+            target = self._download_and_save()
+            if target:
+                self._restart(target)
+            else:
+                print(Fore.RED + "[!] Update failed. Exiting.")
+                sys.exit(0)
+
+
+# =====================================================================
 # Main Application Controller
 # =====================================================================
 
@@ -1518,6 +1848,8 @@ class main:
         self.pkg_manager = PackageManager()
         self.acc_manager = AccountManager()
         self.webhook_manager = WebhookManager(self.config_manager, self.pkg_manager, self.acc_manager)
+        self.license_manager = LicenseManager()
+        self.auto_updater = AutoUpdater()
 
         self.tabs_status = []
         self._kill_lock = threading.Lock()
@@ -1837,7 +2169,7 @@ class main:
             if pkg in cfg["tabs"]:
                 cfg["tabs"][pkg]["user_name"] = new_uname
                 cfg["tabs"][pkg]["user_id"] = new_uid
-                self.config_manager.save_config(self.config_file, cfg)
+                self.config_manager.save_config(self.config_manager.config_file, cfg)
 
             # Kill and relaunch Roblox
             self.pkg_manager.kill_roblox_process(pkg)
@@ -1887,6 +2219,26 @@ class main:
             rs = reason
         t = threading.Thread(target=self._do_change_account, args=(pkg, t_obj, rs), daemon=True)
         t.start()
+
+    def event_tracking(self):
+        try:
+            flag_file = '/sdcard/.w.txt'
+            if os.path.exists(flag_file):
+                return
+            android_id = self.pkg_manager.get_android_id()
+            try:
+                from logsnag import LogSnag
+                logger = LogSnag(token='df0e441f0e4069146d1ec37c42908783', project='wuyx-rejoin-')
+                logger.track(channel='user', event='user logging tool', user_id=android_id, icon='🚀', notify=True)
+            except Exception:
+                pass
+            try:
+                with open(flag_file, 'w') as f:
+                    f.write('1')
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _render_status(self):
         cfg = self.config_manager.load_config()
@@ -2285,6 +2637,9 @@ class main:
                             print(Fore.GREEN + f" [+] Private created: {vip_link}")
             self.config_manager.save_config(self.config_file, cfg)
             print(Fore.GREEN + "[+] Auto buy private done")
+
+        # Event tracking telemetry
+        self.event_tracking()
 
         # Auto sort tab if enabled
         if cfg.get("auto_sort_tab"):
@@ -2929,16 +3284,31 @@ class main:
             time.sleep(1)
 
     def run(self):
-        # 1. Initialize workspace
+        # 1. Check auto-update
+        try:
+            self.auto_updater.check_and_update()
+        except Exception:
+            pass
+
+        # 2. Authenticate license
+        try:
+            if not self.license_manager.authenticate():
+                print(Fore.RED + "[!] License authentication failed. Exiting.")
+                return
+            self.license_manager.start_watchdog()
+        except Exception as e:
+            print(Fore.YELLOW + f"[~] License check bypassed / offline mode: {e}")
+
+        # 3. Initialize workspace
         self.config_manager.init_work_space()
         cfg = self.config_manager.load_config()
         self.pkg_manager.auto_clean_missing_packages(cfg)
 
-        # 2. Auto-start webhook if configured
+        # 4. Auto-start webhook if configured
         if cfg.get("discord_webhook", {}).get("running", False):
             self.webhook_manager.start_webhook()
 
-        # 3. Main menu loop
+        # 5. Main menu loop
         while True:
             menu.banner()
             menu.tool_status(cfg)
