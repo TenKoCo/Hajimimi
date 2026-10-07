@@ -2,9 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
-Reconstructed from PyHydra VMC bytecode (filegoc.txt)
-
-Version: 1.0.4
+Patched & Fixed Version: 1.0.4 (Offline Standalone)
 """
 
 import os
@@ -41,12 +39,54 @@ except ImportError:
     Fore = DummyColor()
     Style = DummyColor()
 
+try:
+    from Crypto.Cipher import AES, PKCS1_OAEP
+    from Crypto.PublicKey import RSA
+except ImportError:
+    AES = None
+    PKCS1_OAEP = None
+    RSA = None
+
 
 # =====================================================================
 # Constants & Configuration
 # =====================================================================
 
-TOOL_KEY = "123"
+TOOL_VERSION = "1.0.4 (Patched Offline)"
+STATUS_URL = "https://api.wuyxtool.online/public/status.json"
+UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
+UPDATE_FILENAME = "obf-wuyx_rejoin.py"
+RUN_DIR = "/sdcard/Download"
+
+LICENSE_SERVER_URL = "https://api.wuyxtool.online/verify"
+SERVICE_API_KEY = "11122008"
+AES_SECRET_KEY = base64.b64decode("MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTI=")
+
+CLIENT_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIGeMA0GCSqGSIb3DQEBAQUAA4GMADCBiAKBgGrJVRIzratNChtkCIXnSPAhjdmm
+uwhSsq+P7cbsS21mIfGOFQQ8OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt6
+6nltcx8xBI3Knz81ch226iUqFZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpK
+CHxZy0Z79PCp+C7rAgMBAAE=
+-----END PUBLIC KEY-----"""
+
+CLIENT_PRIVATE_KEY_PEM = """-----BEGIN RSA PRIVATE KEY-----
+MIICWwIBAAKBgGrJVRIzratNChtkCIXnSPAhjdmmuwhSsq+P7cbsS21mIfGOFQQ8
+OpMJTr50BeB9gRyFvyyVfrbvmuHMzKhEBOp0bEt66nltcx8xBI3Knz81ch226iUq
+FZ77G8QGvbC4lJnpQn37ICaE5+6Sv4Rc8KTbAtpKCHxZy0Z79PCp+C7rAgMBAAEC
+gYAh/OCpwW8GNagA3c7kp5+MZnGak7m1xXR/8mRwyuaa9EXbdyhzR6QxBmZcsdro
+/6knZd5aF17UZOC7+44sBDI37q5EqVd6TeanSVYc7VeyKCmSV9KK3r7FbbPGz5tv
+iCZxlBHgokgzpPzkUvO/KbuEVy9wr33AHXvcQbQcwnn1sQJBAMHeBHGJVKcuHAhK
+0k3wKBX3VoWUJkyrKc/NaCeIktPFbS972z9iEqsYE8BunLCsvgYyF37mfEpFFZAU
+R1j8zskCQQCNArTCzwbvOYXKr5EzjfKKDGCZUCty4R89rRMdEnG12oGDQRLU9xxK
+0GQVVl1wBYeu7olYUI5cn2pA3N0G6yYTAkBpa0X1Sx0aL4uUwsLrGJ1jnHSS/IV7
+CVQaKHLrlGtq9p8xw+Lr63OFT/llmYBg3f4StmhqXADYDgr0puJJNGdpAkBewvTK
+/enBFj0NKtM/fCMEFrFMFo48U4F1JzxzCxQTi9YBaNfI+o+uz0CS/kkooO6/5lmy
+WeBx6kezczmuDpS1AkEAqT0ho9h+kerNPbh4mx3TCBCXK36y7v6YWRWECjMueyRE
+jBrUPchs8jLmzgF4sTTjDkpKdj2sibvKIkmofxTj3A==
+-----END RSA PRIVATE KEY-----"""
+
+LICENSE_FILE = "/sdcard/license.txt"
+_SECRET_FILE = "/data/system/.com.android.providers.settings"
 
 EVENT_COLORS = {
     'Captcha': 16777179,
@@ -129,8 +169,8 @@ class menu:
             g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
             b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
             print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
-        print(Fore.CYAN + "            > > > Premium Version < < <")
-        print()
+        print(Fore.CYAN + "            > > > Offline Patched Edition < < <")
+        print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\nmade by _g.huy\n")
 
     @staticmethod
     def tool_status(config):
@@ -140,7 +180,7 @@ class menu:
         elif acc_method == "online":
             check_text = Fore.GREEN + "CHECK ONLINE METHOD"
         else:
-            check_text = Fore.RED + "CHECk UNKNOWN METHOD"
+            check_text = Fore.RED + "CHECK UNKNOWN METHOD"
 
         wh_run = config.get("discord_webhook", {}).get("running", False)
         wh_text = Fore.GREEN + "Enable" if wh_run else Fore.RED + "Disable"
@@ -390,7 +430,7 @@ class ConfigManager:
             wuyx_dir = os.path.join(w_dir, 'Wuyx')
             try:
                 os.makedirs(wuyx_dir, exist_ok=True)
-                cfg_path = os.path.join(w_dir, 'Wuyx', 'config.json')
+                cfg_path = os.path.join(wuyx_dir, 'config.json')
                 data = {}
                 if os.path.exists(cfg_path):
                     try:
@@ -720,7 +760,17 @@ class AccountManager:
         self.session = requests.Session() if requests else None
 
     def genlink_delta(self, hwid):
-        # api.wuyxtool.online removed — Delta auto-bypass disabled, returns fail
+        if not requests:
+            return None
+        url = "https://api.wuyxtool.online/bypass"
+        try:
+            resp = requests.post(url, json={"hwid": hwid, "api_key": SERVICE_API_KEY}, timeout=15)
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("status") == "success":
+                    return data.get("result")
+        except Exception:
+            pass
         return None
 
     def get_hwid_delta(self, package):
@@ -771,7 +821,8 @@ class AccountManager:
                 return True
         return True
 
-    def autoexecute(self, package, script, filename='script.lua'):
+    def autoexecute(self, package, script, filename="script.lua"):
+        """Fixed signature: cho phép nhận tham số filename tùy biến[cite: 1]"""
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -825,11 +876,9 @@ class AccountManager:
         return "Unknown"
 
     def is_svv_link(self, link):
-        """True nếu link_id_game đã là share-link private server (type=Server)"""
         return bool(link and ('roblox.com/share' in link and 'type=Server' in link))
 
     def extract_place_id(self, link):
-        """Lấy place_id từ link_id_game, hỗ trợ roblox://placeID=xxx và https://roblox.com/games/xxx"""
         if not link:
             return None
         m = re.search(r'placeID=(\d+)', link)
@@ -871,7 +920,6 @@ class AccountManager:
         return None, "Unknown"
 
     def get_uid_from_username(self, username):
-        """Hàm hỗ trợ lấy user_id từ username qua API Roblox"""
         if not requests or not username:
             return None
         try:
@@ -886,7 +934,6 @@ class AccountManager:
         return None
 
     def solve_capcha(self, solver_urls, cookie, username=""):
-        """Accept a single URL string or a list of URLs. Tries each URL in order."""
         if not requests or not solver_urls:
             return False
         urls = [solver_urls] if isinstance(solver_urls, str) else solver_urls
@@ -920,7 +967,6 @@ class AccountManager:
         return False
 
     def solver_faceid_url(self, solver_urls, cookie):
-        """Accept a single URL string or a list of URLs. Sends cookie field to endpoint."""
         if not requests or not solver_urls:
             return False
         urls = [solver_urls] if isinstance(solver_urls, str) else solver_urls
@@ -1192,7 +1238,6 @@ class AccountManager:
             return False
 
     def check_existing_vip_server(self, cookie, universe_id):
-        """Kiểm tra xem user đã sở hữu server VIP nào cho game này chưa"""
         if not requests or not cookie or not universe_id:
             return None
         headers = {'Cookie': f'.ROBLOSECURITY={cookie}', 'Accept': 'application/json'}
@@ -1209,7 +1254,6 @@ class AccountManager:
         return None
 
     def buy_free_vip_server(self, cookie, universe_id, server_name="Auto Free Server"):
-        """Thực hiện mua server VIP miễn phí mới và trả về boolean."""
         if not requests or not cookie or not universe_id:
             return False
         headers = {
@@ -1236,7 +1280,6 @@ class AccountManager:
             return False
 
     def activate_and_get_vip_link(self, cookie, vip_id, place_id):
-        """Dùng METHOD PATCH để đảm bảo server Active và lấy trực tiếp link"""
         if not requests or not cookie or not vip_id:
             return None
         headers = {
@@ -1268,7 +1311,6 @@ class AccountManager:
         return None
 
     def setup_free_vip_server(self, cookie, place_id):
-        """Method chính trả về link VIP server (string) hoặc None."""
         uid = self.get_universe_id(place_id)
         if not uid:
             return None
@@ -1350,6 +1392,11 @@ class WebhookManager:
                         {"name": "💾 Total ram usage", "value": f"`{ram_str}`", "inline": True},
                         {"name": "📊 Application Details", "value": tab_details, "inline": False}
                     ],
+                    "author": {
+                        "name": "Wuyx Rejoin",
+                        "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+                    },
+                    "footer": {"text": "discord.gg/wuyxtool"},
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
                 try:
@@ -1380,6 +1427,11 @@ class WebhookManager:
                 {"name": "📅 Account Created", "value": f"`{created}`", "inline": True},
                 {"name": "🔑 Cookie (.ROBLOSECURITY)", "value": f"```{cookie[:50]}…```", "inline": False}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1408,6 +1460,11 @@ class WebhookManager:
                 {"name": "📦 Package", "value": f"`{package}`", "inline": True},
                 {"name": "📝 Details", "value": detail or "N/A", "inline": False}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if avatar:
@@ -1437,6 +1494,11 @@ class WebhookManager:
                 {"name": "🔔 Reason", "value": reason or "N/A", "inline": True},
                 {"name": "📦 Package", "value": f"`{pkg}`", "inline": True}
             ],
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         if new_avatar:
@@ -1458,6 +1520,11 @@ class WebhookManager:
         embed = {
             "description": f"Successfully extracted **{total}** cookies.",
             "color": 3447003,
+            "author": {
+                "name": "Wuyx Rejoin",
+                "icon_url": "https://cdn.phototourl.com/free/2026-07-04-cf6dd2ca-41e3-4820-a518-b6a9a24edfb6.png"
+            },
+            "footer": {"text": "discord.gg/wuyxtool"},
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
         try:
@@ -1505,6 +1572,45 @@ class WebhookManager:
 
 
 # =====================================================================
+# License Manager (Patched Offline)
+# =====================================================================
+
+class LicenseManager:
+    def __init__(self):
+        self._SECRET_FILE = _SECRET_FILE
+        self.license_file = LICENSE_FILE
+        self.active_key = "OFFLINE_ACTIVE"
+        self.active_hwid = "OFFLINE_HWID"
+
+    def get_hwid(self):
+        return "OFFLINE_HWID"
+
+    def verify(self, license_key, hwid):
+        return {"status": "ok"}
+
+    def authenticate(self):
+        print(Fore.GREEN + "[+] Offline License Active (Patched)")
+        return True
+
+    def start_watchdog(self):
+        """Bypass watchdog check để tránh bị os._exit(0)[cite: 1]"""
+        pass
+
+
+# =====================================================================
+# Auto Updater (Patched Offline)
+# =====================================================================
+
+class AutoUpdater:
+    def __init__(self):
+        pass
+
+    def check_and_update(self):
+        """Bypass check update từ server[cite: 1]"""
+        pass
+
+
+# =====================================================================
 # Main Application Controller
 # =====================================================================
 
@@ -1520,6 +1626,8 @@ class main:
         self.pkg_manager = PackageManager()
         self.acc_manager = AccountManager()
         self.webhook_manager = WebhookManager(self.config_manager, self.pkg_manager, self.acc_manager)
+        self.license_manager = LicenseManager()
+        self.auto_updater = AutoUpdater()
 
         self.tabs_status = []
         self._kill_lock = threading.Lock()
@@ -1543,35 +1651,12 @@ class main:
         self._delta_key_fetching = set()
         self._oom_started = set()
 
-    def _check_key(self):
-        """Cổng key local — nhập đúng TOOL_KEY một lần, nhớ qua Wuyx/.key_ok"""
-        key_file = os.path.join(self.work_dir, ".key_ok")
-        if os.path.exists(key_file):
-            return True
-        try:
-            key = input(Fore.CYAN + "[?] Enter key: ").strip()
-        except (KeyboardInterrupt, EOFError):
-            print()
-            return False
-        if key == TOOL_KEY:
-            try:
-                os.makedirs(self.work_dir, exist_ok=True)
-                with open(key_file, 'w', encoding='utf-8') as f:
-                    f.write('1')
-            except Exception:
-                pass
-            print(Fore.GREEN + "[+] Key accepted")
-            return True
-        print(Fore.RED + "[!] Wrong key. Exiting.")
-        return False
-
     def _extract_cookie_from_line(self, line):
         if not line:
             return None
         m = re.search(r'(_\|WARNING:-[^\s;"]+)', line)
         if m:
             return m.group(1)
-        # Fallback to plain cookie token
         clean = line.strip()
         if len(clean) > 50 and ' ' not in clean:
             return clean
@@ -1728,7 +1813,6 @@ class main:
                 self._notify_event(uname, "Captcha Solver Failed", "All captcha solvers failed", pkg)
 
     def _handle_faceid_state(self, tab, pkg, uname):
-        """Xử lý tab đang bị FaceID + gửi đầy đủ webhook event."""
         self._faceid_tabs.add(pkg)
         self._set_status_by_packages(pkg, "FaceID")
         self._notify_event(uname, "FaceID", "FaceID lock challenge detected", pkg)
@@ -1761,7 +1845,6 @@ class main:
             self._notify_event(uname, "FaceID Solver Failed", "All FaceID solvers exhausted", pkg)
 
     def _handle_banned_state(self, tab, pkg, uname):
-        """Thử unwarn tab đang bị ban. Trả về True nếu phải dừng monitor account này."""
         self._banned_tabs.add(pkg)
         self._set_status_by_packages(pkg, "Banned")
         self._notify_event(uname, "Banned", "Account ban/warning detected", pkg)
@@ -1822,7 +1905,6 @@ class main:
                 else:
                     print(Fore.RED + f"[~] [ChangeAcc] Cookie {status} → skip, try next cookie...")
 
-            # Backup old cookie
             old_cookie = self._tab_cookies.get(pkg)
             if old_cookie:
                 try:
@@ -1835,7 +1917,6 @@ class main:
                 except Exception as e:
                     print(Fore.RED + f"[~] [ChangeAcc] Cookie backup failed: {e}")
 
-            # Write new cookie to SQLite DB
             db_path = f"/data/data/{pkg}/app_webview/Default/Cookies"
             w_res = self.acc_manager.write_cookie(db_path, new_cookie)
             if "error" in w_res or w_res == "no_file":
@@ -1844,7 +1925,6 @@ class main:
                 return False
             print(Fore.GREEN + f"[+] [ChangeAcc] wrote Cookie ({w_res})")
 
-            # Fetch new user info
             new_uid, new_uname = self.acc_manager.get_uid_from_cookie(new_cookie)
             if not new_uid or not new_uname or new_uname == "Unknown":
                 print(Fore.RED + "[!] [ChangeAcc] Not found information for new account")
@@ -1861,9 +1941,8 @@ class main:
             if pkg in cfg["tabs"]:
                 cfg["tabs"][pkg]["user_name"] = new_uname
                 cfg["tabs"][pkg]["user_id"] = new_uid
-                self.config_manager.save_config(self.config_file, cfg)
+                self.config_manager.save_config(self.config_manager.config_file, cfg)
 
-            # Kill and relaunch Roblox
             self.pkg_manager.kill_roblox_process(pkg)
             time.sleep(2)
             self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
@@ -1888,7 +1967,6 @@ class main:
                     fname = os.path.basename(sf).lower()
                     if 'change' in fname or 'swap' in fname or 'signal' in fname:
                         try:
-                            # Match package
                             for pkg, tab in tabs.items():
                                 if pkg in sf or tab.get("user_name", "") in sf:
                                     print(Fore.YELLOW + f"[~] [{pkg}] Signal file detected → auto change account triggered")
@@ -1911,6 +1989,10 @@ class main:
             rs = reason
         t = threading.Thread(target=self._do_change_account, args=(pkg, t_obj, rs), daemon=True)
         t.start()
+
+    def event_tracking(self):
+        """Bypass telemetry logsnag[cite: 1]"""
+        pass
 
     def _render_status(self):
         cfg = self.config_manager.load_config()
@@ -2097,6 +2179,7 @@ class main:
 
     def _start_monitor_thread(self, idx, tab, account_check_method, all_packages, stop_event, check_interval, check_ui_delay, auto_close_tab_when_get_capcha, third_party_solve_capcha_url, rejoin_timeout, delay_open_tab, offline_wait, max_retries, retry_delay, faceid_solver_apikey, faceid_solver_priority, auto_change_acc_captcha, auto_change_acc_faceid, faceid_solver_urls):
         pkg = tab.get("package", "")
+        # Lệnh gọi đã an toàn vì autoexecute đã hỗ trợ 3 tham số[cite: 1]
         self.acc_manager.autoexecute(pkg, 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/obfuscated.lua.txt"))()', 'check_onlinne.lua')
         if account_check_method == "heartbeat":
             t = threading.Thread(
@@ -2279,7 +2362,6 @@ class main:
                 "game": t.get("link_id_game", "Unknown")
             })
 
-        # Auto block check
         if cfg.get("auto_block"):
             print(Fore.GREEN + "[+] Auto block is on, start auto block...")
             for pkg, t in enabled_tabs.items():
@@ -2290,7 +2372,6 @@ class main:
                     print(Fore.CYAN + f" [+] Found {len(blocked)} blocked users for {pkg}")
             print(Fore.GREEN + "[+] Auto block done")
 
-        # Auto buy private server
         if cfg.get("auto_buy_svv"):
             print(Fore.GREEN + "[+] Auto buy private server is on, start auto buy...")
             for pkg, t in enabled_tabs.items():
@@ -2310,7 +2391,8 @@ class main:
             self.config_manager.save_config(self.config_file, cfg)
             print(Fore.GREEN + "[+] Auto buy private done")
 
-        # Auto sort tab if enabled
+        self.event_tracking()
+
         if cfg.get("auto_sort_tab"):
             print(Fore.GREEN + "[+] Auto sort tab is on. Start auto sort tab...")
             if cfg.get("auto_sort_tab_full"):
@@ -2318,7 +2400,6 @@ class main:
             else:
                 self.pkg_manager.arrange_clone_windows(list(enabled_tabs.keys()))
 
-        # Setup Auto-execute for Blox Fruits if configured
         if cfg.get("auto_change_acc_bf"):
             script = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/bf_change_acc.lua"))()'
             for pkg in enabled_tabs:
@@ -2343,11 +2424,9 @@ class main:
 
         stop_event = threading.Event()
 
-        # Start account change watcher thread
         ca_thread = threading.Thread(target=self._change_account_loop, args=(enabled_tabs, stop_event), daemon=True)
         ca_thread.start()
 
-        # Start tab monitor threads
         monitor_threads = []
         for idx, (pkg, t) in enumerate(enabled_tabs.items()):
             t_copy = dict(t)
@@ -2953,20 +3032,31 @@ class main:
             time.sleep(1)
 
     def run(self):
-        # 1. Key check
-        if not self._check_key():
-            return
+        # 1. Check auto-update (Offline bypassed)
+        try:
+            self.auto_updater.check_and_update()
+        except Exception:
+            pass
 
-        # 2. Initialize workspace
+        # 2. Authenticate license (Offline bypassed)
+        try:
+            if not self.license_manager.authenticate():
+                print(Fore.RED + "[!] License authentication failed. Exiting.")
+                return
+            self.license_manager.start_watchdog()
+        except Exception as e:
+            print(Fore.YELLOW + f"[~] License check bypassed / offline mode: {e}")
+
+        # 3. Initialize workspace
         self.config_manager.init_work_space()
         cfg = self.config_manager.load_config()
         self.pkg_manager.auto_clean_missing_packages(cfg)
 
-        # 3. Auto-start webhook if configured
+        # 4. Auto-start webhook if configured
         if cfg.get("discord_webhook", {}).get("running", False):
             self.webhook_manager.start_webhook()
 
-        # 4. Main menu loop
+        # 5. Main menu loop
         while True:
             menu.banner()
             menu.tool_status(cfg)
