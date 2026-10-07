@@ -2,7 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 Wuyx Rejoin - Roblox Multi-Clone / Alt Account Automation Tool
-Patched & Fixed Version: 1.0.4 (Offline Standalone)
+Reconstructed from PyHydra VMC bytecode (filegoc.txt)
+
+Version: 1.0.5
+Author: Huy (V2) / _g.huy
+Discord: discord.gg/5G3cStpbcx / discord.gg/wuyxtool
 """
 
 import os
@@ -52,7 +56,7 @@ except ImportError:
 # Constants & Configuration
 # =====================================================================
 
-TOOL_VERSION = "1.0.4 (Patched Offline)"
+TOOL_VERSION = "1.0.5"
 STATUS_URL = "https://api.wuyxtool.online/public/status.json"
 UPDATE_URL = "https://api.wuyxtool.online/public/wuyx_rejoin.py"
 UPDATE_FILENAME = "obf-wuyx_rejoin.py"
@@ -169,13 +173,13 @@ class menu:
             g = int(start_rgb[1] + (end_rgb[1] - start_rgb[1]) * ratio)
             b = int(start_rgb[2] + (end_rgb[2] - start_rgb[2]) * ratio)
             print(f"\x1b[38;2;{r};{g};{b}m{line}\x1b[0m")
-        print(Fore.CYAN + "            > > > Offline Patched Edition < < <")
+        print(Fore.CYAN + "            > > > Premium Version < < <")
         print(Fore.LIGHTBLUE_EX + "Discord: discord.gg/5G3cStpbcx\nmade by _g.huy\n")
 
     @staticmethod
     def tool_status(config):
         acc_method = config.get("account_check_method", "executor")
-        if acc_method == "executor":
+        if acc_method in ("executor", "heartbeat"):
             check_text = Fore.GREEN + "CHECK EXECUTOR METHOD"
         elif acc_method == "online":
             check_text = Fore.GREEN + "CHECK ONLINE METHOD"
@@ -186,7 +190,7 @@ class menu:
         wh_text = Fore.GREEN + "Enable" if wh_run else Fore.RED + "Disable"
 
         bp = config.get("auto_bypass", False)
-        bp_text = Fore.GREEN + "Enable" if bp else Fore.RED + "Disable"
+        bp_text = Fore.GREEN + "Enable" if bp and bp != False else Fore.RED + "Disable"
 
         st = config.get("auto_sort_tab", False) or config.get("auto_sort_tab_full", False)
         st_text = Fore.GREEN + "Enable" if st else Fore.RED + "Disable"
@@ -707,6 +711,7 @@ class PackageManager:
     <int name="app_cloner_minimized_point_x" value="{l}" />
     <int name="app_cloner_minimized_point_y" value="{t}" />
 """
+            # Write via root shell
             cmd = f'su -c "cat \'{pref_file}\'"'
             res = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, text=True)
             if res.returncode == 0 and '<map>' in res.stdout:
@@ -727,6 +732,7 @@ class PackageManager:
                 self._write_window_coords(pkg, (0, 0, w, h))
             return
 
+        # Grid calculation
         cols = 2 if n <= 4 else 3
         rows = (n + cols - 1) // cols
         cell_w = w // cols
@@ -821,8 +827,7 @@ class AccountManager:
                 return True
         return True
 
-    def autoexecute(self, package, script, filename="script.lua"):
-        """Fixed signature: cho phép nhận tham số filename tùy biến[cite: 1]"""
+    def autoexecute(self, package, script):
         dirs = set()
         dirs.update(glob.glob('/sdcard/*/Autoexec*'))
         dirs.update(glob.glob('/sdcard/*/*/Autoexec*'))
@@ -830,7 +835,7 @@ class AccountManager:
         for d in dirs:
             try:
                 os.makedirs(d, exist_ok=True)
-                with open(os.path.join(d, filename), 'w', encoding='utf-8') as f:
+                with open(os.path.join(d, 'script.lua'), 'w', encoding='utf-8') as f:
                     f.write(script)
             except Exception:
                 pass
@@ -876,9 +881,11 @@ class AccountManager:
         return "Unknown"
 
     def is_svv_link(self, link):
+        """True nếu link_id_game đã là share-link private server (type=Server)"""
         return bool(link and ('roblox.com/share' in link and 'type=Server' in link))
 
     def extract_place_id(self, link):
+        """Lấy place_id từ link_id_game, hỗ trợ roblox://placeID=xxx và https://roblox.com/games/xxx"""
         if not link:
             return None
         m = re.search(r'placeID=(\d+)', link)
@@ -920,6 +927,7 @@ class AccountManager:
         return None, "Unknown"
 
     def get_uid_from_username(self, username):
+        """Hàm hỗ trợ lấy user_id từ username qua API Roblox"""
         if not requests or not username:
             return None
         try:
@@ -934,6 +942,7 @@ class AccountManager:
         return None
 
     def solve_capcha(self, solver_urls, cookie, username=""):
+        """Accept a single URL string or a list of URLs. Tries each URL in order."""
         if not requests or not solver_urls:
             return False
         urls = [solver_urls] if isinstance(solver_urls, str) else solver_urls
@@ -967,6 +976,7 @@ class AccountManager:
         return False
 
     def solver_faceid_url(self, solver_urls, cookie):
+        """Accept a single URL string or a list of URLs. Sends cookie field to endpoint."""
         if not requests or not solver_urls:
             return False
         urls = [solver_urls] if isinstance(solver_urls, str) else solver_urls
@@ -995,6 +1005,7 @@ class AccountManager:
             if r.status_code == 401:
                 return "dead"
             if r.status_code == 403:
+                # Could be ban or captcha
                 txt = r.text.lower()
                 if 'captcha' in txt:
                     return "captcha"
@@ -1125,6 +1136,7 @@ class AccountManager:
                 conn.close()
                 return "updated"
             else:
+                # Inspect table schema
                 c.execute("PRAGMA table_info(cookies)")
                 cols = [row[1] for row in c.fetchall()]
                 ins_cols = ["creation_utc", "host_key", "top_frame_site_key", "name", "value", "path", "expires_utc",
@@ -1170,6 +1182,7 @@ class AccountManager:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             'Accept': 'application/json'
         }
+        # First get csrf token
         csrf = None
         try:
             r = requests.post("https://auth.roblox.com/v2/logout", headers=headers, timeout=5)
@@ -1238,6 +1251,7 @@ class AccountManager:
             return False
 
     def check_existing_vip_server(self, cookie, universe_id):
+        """Kiểm tra xem user đã sở hữu server VIP nào cho game này chưa"""
         if not requests or not cookie or not universe_id:
             return None
         headers = {'Cookie': f'.ROBLOSECURITY={cookie}', 'Accept': 'application/json'}
@@ -1254,6 +1268,7 @@ class AccountManager:
         return None
 
     def buy_free_vip_server(self, cookie, universe_id, server_name="Auto Free Server"):
+        """Thực hiện mua server VIP miễn phí mới và trả về boolean."""
         if not requests or not cookie or not universe_id:
             return False
         headers = {
@@ -1280,6 +1295,7 @@ class AccountManager:
             return False
 
     def activate_and_get_vip_link(self, cookie, vip_id, place_id):
+        """Dùng METHOD PATCH để đảm bảo server Active và lấy trực tiếp link"""
         if not requests or not cookie or not vip_id:
             return None
         headers = {
@@ -1311,6 +1327,7 @@ class AccountManager:
         return None
 
     def setup_free_vip_server(self, cookie, place_id):
+        """Method chính trả về link VIP server (string) hoặc None."""
         uid = self.get_universe_id(place_id)
         if not uid:
             return None
@@ -1572,42 +1589,206 @@ class WebhookManager:
 
 
 # =====================================================================
-# License Manager (Patched Offline)
+# License Manager
 # =====================================================================
 
 class LicenseManager:
     def __init__(self):
         self._SECRET_FILE = _SECRET_FILE
         self.license_file = LICENSE_FILE
-        self.active_key = "OFFLINE_ACTIVE"
-        self.active_hwid = "OFFLINE_HWID"
+        self.active_key = None
+        self.active_hwid = None
+        self._ensure_secret_file()
+
+    def _ensure_secret_file(self):
+        try:
+            if not os.path.exists(self._SECRET_FILE):
+                token = secrets.token_hex(16)
+                subprocess.run(f'su -c "mkdir -p \'{os.path.dirname(self._SECRET_FILE)}\' && echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+            else:
+                res = subprocess.run(f'su -c "cat \'{self._SECRET_FILE}\'"', shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                if not res.stdout.strip():
+                    token = secrets.token_hex(16)
+                    subprocess.run(f'su -c "echo \'{token}\' > \'{self._SECRET_FILE}\'"', shell=True, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
 
     def get_hwid(self):
-        return "OFFLINE_HWID"
+        try:
+            r1 = subprocess.run("settings get secure android_id", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            android_id = r1.stdout.strip()
+            r2 = subprocess.run("getprop ro.product.model", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            dev_model = r2.stdout.strip()
+            r3 = subprocess.run(f"su -c \"cat '{self._SECRET_FILE}'\"", shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+            secret = r3.stdout.strip()
+            import hashlib
+            raw = f"{android_id}:{dev_model}:{secret}".encode('utf-8')
+            return hashlib.sha256(raw).hexdigest()
+        except Exception:
+            return "0" * 64
+
+    def _aes_encrypt(self, plaintext):
+        if not AES:
+            return {}
+        nonce = os.urandom(12)
+        cipher = AES.new(AES_SECRET_KEY, AES.MODE_GCM, nonce=nonce)
+        ciphertext, tag = cipher.encrypt_and_digest(plaintext.encode('utf-8'))
+        return {
+            "key": base64.b64encode(AES_SECRET_KEY).decode(),
+            "nonce": base64.b64encode(nonce).decode(),
+            "tag": base64.b64encode(tag).decode(),
+            "ciphertext": base64.b64encode(ciphertext).decode()
+        }
+
+    def _hybrid_decrypt(self, resp_body):
+        if not PKCS1_OAEP or not RSA or not AES:
+            return resp_body
+        try:
+            enc_key = base64.b64decode(resp_body["key"])
+            nonce = base64.b64decode(resp_body["nonce"])
+            tag = base64.b64decode(resp_body["tag"])
+            ciphertext = base64.b64decode(resp_body["ciphertext"])
+
+            priv_key = RSA.import_key(CLIENT_PRIVATE_KEY_PEM)
+            rsa_cipher = PKCS1_OAEP.new(priv_key)
+            aes_key = rsa_cipher.decrypt(enc_key)
+
+            cipher = AES.new(aes_key, AES.MODE_GCM, nonce=nonce)
+            plaintext = cipher.decrypt_and_verify(ciphertext, tag)
+            return json.loads(plaintext.decode('utf-8'))
+        except Exception:
+            return resp_body
 
     def verify(self, license_key, hwid):
-        return {"status": "ok"}
+        if not requests:
+            return {"status": "ok"}
+        payload = {
+            "license_key": license_key,
+            "hwid": hwid,
+            "timestamp": int(time.time()),
+            "api_key": SERVICE_API_KEY
+        }
+        try:
+            r = requests.post(LICENSE_SERVER_URL, json=payload, timeout=10)
+            if r.status_code == 200:
+                body = r.json()
+                if "ciphertext" in body:
+                    return self._hybrid_decrypt(body)
+                return body
+            return {"status": "error", "reason": f"http_status_{r.status_code}"}
+        except Exception as e:
+            return {"status": "error", "reason": f"connection_failed: {e}"}
 
-    def authenticate(self):
-        print(Fore.GREEN + "[+] Offline License Active (Patched)")
+    def _load_cached_key(self):
+        try:
+            if os.path.exists(self.license_file):
+                with open(self.license_file, 'r', encoding='utf-8') as f:
+                    return f.read().strip()
+        except Exception:
+            pass
+        return None
+
+    def _save_key(self, key):
+        try:
+            with open(self.license_file, 'w', encoding='utf-8') as f:
+                f.write(key.strip().upper())
+        except Exception:
+            pass
+
+    def _check_tool_status(self):
+        if not requests:
+            return True
+        headers = {
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+        }
+        try:
+            r = requests.get(STATUS_URL, headers=headers, timeout=10)
+            if r.status_code == 200:
+                data = r.json()
+                return data.get("run", True)
+        except Exception:
+            pass
         return True
 
+    def authenticate(self):
+        # BYPASSED — always pass
+        hwid = self.get_hwid()
+        self.active_key = "BYPASS"
+        self.active_hwid = hwid
+        print(Fore.GREEN + "[+] Activated (bypass)")
+        return True
+
+    def _watchdog_loop(self):
+        # BYPASSED — no remote kill
+        while True:
+            time.sleep(3600)
+
     def start_watchdog(self):
-        """Bypass watchdog check để tránh bị os._exit(0)[cite: 1]"""
+        # BYPASSED — do not start remote re-check
         pass
 
 
 # =====================================================================
-# Auto Updater (Patched Offline)
+# Auto Updater
 # =====================================================================
 
 class AutoUpdater:
     def __init__(self):
-        pass
+        self.status_url = STATUS_URL
+        self.update_url = UPDATE_URL
+        self.update_filename = UPDATE_FILENAME
+        self.run_dir = RUN_DIR
+
+    def _get_remote_version(self):
+        if not requests:
+            return None
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.status_url, headers=headers, timeout=10)
+            if r.status_code == 200:
+                return r.json().get("version")
+        except Exception:
+            pass
+        return None
+
+    def _parse_version(self, v_str):
+        try:
+            return tuple(int(x) for x in re.findall(r'\d+', v_str))
+        except Exception:
+            return (0,)
+
+    def _is_newer(self, remote, local):
+        r_parsed = self._parse_version(remote)
+        l_parsed = self._parse_version(local)
+        return r_parsed > l_parsed
+
+    def _download_and_save(self):
+        if not requests:
+            return None
+        target = os.path.join(self.run_dir, self.update_filename)
+        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache', 'User-Agent': 'Mozilla/5.0'}
+        try:
+            r = requests.get(self.update_url, headers=headers, timeout=30)
+            if r.status_code == 200:
+                os.makedirs(self.run_dir, exist_ok=True)
+                with open(target, 'wb') as f:
+                    f.write(r.content)
+                return target
+        except Exception as e:
+            print(Fore.RED + f"[!] Update failed: {e}")
+        return None
+
+    def _restart(self, target_path):
+        print(Fore.GREEN + "[+] Update applied, restarting...")
+        cmd = f'su -c "export PATH=$PATH:/data/data/com.termux/files/usr/bin && export TERM=xterm-256color && cd \'{self.run_dir}\' && python \'{os.path.basename(target_path)}\'"'
+        os.system(cmd)
+        sys.exit(0)
 
     def check_and_update(self):
-        """Bypass check update từ server[cite: 1]"""
-        pass
+        # BYPASSED — skip remote version / download / restart
+        return
 
 
 # =====================================================================
@@ -1657,6 +1838,7 @@ class main:
         m = re.search(r'(_\|WARNING:-[^\s;"]+)', line)
         if m:
             return m.group(1)
+        # Fallback to plain cookie token
         clean = line.strip()
         if len(clean) > 50 and ' ' not in clean:
             return clean
@@ -1813,6 +1995,7 @@ class main:
                 self._notify_event(uname, "Captcha Solver Failed", "All captcha solvers failed", pkg)
 
     def _handle_faceid_state(self, tab, pkg, uname):
+        """Xử lý tab đang bị FaceID + gửi đầy đủ webhook event."""
         self._faceid_tabs.add(pkg)
         self._set_status_by_packages(pkg, "FaceID")
         self._notify_event(uname, "FaceID", "FaceID lock challenge detected", pkg)
@@ -1845,6 +2028,7 @@ class main:
             self._notify_event(uname, "FaceID Solver Failed", "All FaceID solvers exhausted", pkg)
 
     def _handle_banned_state(self, tab, pkg, uname):
+        """Thử unwarn tab đang bị ban. Trả về True nếu phải dừng monitor account này."""
         self._banned_tabs.add(pkg)
         self._set_status_by_packages(pkg, "Banned")
         self._notify_event(uname, "Banned", "Account ban/warning detected", pkg)
@@ -1905,6 +2089,7 @@ class main:
                 else:
                     print(Fore.RED + f"[~] [ChangeAcc] Cookie {status} → skip, try next cookie...")
 
+            # Backup old cookie
             old_cookie = self._tab_cookies.get(pkg)
             if old_cookie:
                 try:
@@ -1917,6 +2102,7 @@ class main:
                 except Exception as e:
                     print(Fore.RED + f"[~] [ChangeAcc] Cookie backup failed: {e}")
 
+            # Write new cookie to SQLite DB
             db_path = f"/data/data/{pkg}/app_webview/Default/Cookies"
             w_res = self.acc_manager.write_cookie(db_path, new_cookie)
             if "error" in w_res or w_res == "no_file":
@@ -1925,6 +2111,7 @@ class main:
                 return False
             print(Fore.GREEN + f"[+] [ChangeAcc] wrote Cookie ({w_res})")
 
+            # Fetch new user info
             new_uid, new_uname = self.acc_manager.get_uid_from_cookie(new_cookie)
             if not new_uid or not new_uname or new_uname == "Unknown":
                 print(Fore.RED + "[!] [ChangeAcc] Not found information for new account")
@@ -1943,6 +2130,7 @@ class main:
                 cfg["tabs"][pkg]["user_id"] = new_uid
                 self.config_manager.save_config(self.config_manager.config_file, cfg)
 
+            # Kill and relaunch Roblox
             self.pkg_manager.kill_roblox_process(pkg)
             time.sleep(2)
             self.pkg_manager.launch_roblox(pkg, tab.get("link_id_game"))
@@ -1967,6 +2155,7 @@ class main:
                     fname = os.path.basename(sf).lower()
                     if 'change' in fname or 'swap' in fname or 'signal' in fname:
                         try:
+                            # Match package
                             for pkg, tab in tabs.items():
                                 if pkg in sf or tab.get("user_name", "") in sf:
                                     print(Fore.YELLOW + f"[~] [{pkg}] Signal file detected → auto change account triggered")
@@ -1991,8 +2180,24 @@ class main:
         t.start()
 
     def event_tracking(self):
-        """Bypass telemetry logsnag[cite: 1]"""
-        pass
+        try:
+            flag_file = '/sdcard/.w.txt'
+            if os.path.exists(flag_file):
+                return
+            android_id = self.pkg_manager.get_android_id()
+            try:
+                from logsnag import LogSnag
+                logger = LogSnag(token='df0e441f0e4069146d1ec37c42908783', project='wuyx-rejoin-')
+                logger.track(channel='user', event='user logging tool', user_id=android_id, icon='🚀', notify=True)
+            except Exception:
+                pass
+            try:
+                with open(flag_file, 'w') as f:
+                    f.write('1')
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     def _render_status(self):
         cfg = self.config_manager.load_config()
@@ -2142,8 +2347,11 @@ class main:
             uname = tab.get("user_name", "")
         else:
             pkg = str(tab)
-            uname = str(account_check_method)
-        hb = self.acc_manager.get_file_hb(uname) or self.acc_manager.get_file_hb(pkg)
+            uname = ""
+        # Heartbeat file is looked up by package (and fallback username patterns inside get_file_hb)
+        hb = self.acc_manager.get_file_hb(pkg)
+        if not hb and uname:
+            hb = self.acc_manager.get_file_hb(uname)
         if hb and os.path.exists(hb):
             try:
                 if time.time() - os.path.getmtime(hb) < 60:
@@ -2179,9 +2387,8 @@ class main:
 
     def _start_monitor_thread(self, idx, tab, account_check_method, all_packages, stop_event, check_interval, check_ui_delay, auto_close_tab_when_get_capcha, third_party_solve_capcha_url, rejoin_timeout, delay_open_tab, offline_wait, max_retries, retry_delay, faceid_solver_apikey, faceid_solver_priority, auto_change_acc_captcha, auto_change_acc_faceid, faceid_solver_urls):
         pkg = tab.get("package", "")
-        # Lệnh gọi đã an toàn vì autoexecute đã hỗ trợ 3 tham số[cite: 1]
-        self.acc_manager.autoexecute(pkg, 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/obfuscated.lua.txt"))()', 'check_onlinne.lua')
-        if account_check_method == "heartbeat":
+        self.acc_manager.autoexecute(pkg, 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/obfuscated.lua.txt"))()')
+        if account_check_method in ("heartbeat", "executor"):
             t = threading.Thread(
                 target=self._tab_monitor_loop_2,
                 args=(idx, tab, all_packages, stop_event, check_interval, check_ui_delay, auto_close_tab_when_get_capcha, third_party_solve_capcha_url, rejoin_timeout, delay_open_tab, faceid_solver_apikey, faceid_solver_priority, auto_change_acc_captcha, auto_change_acc_faceid, faceid_solver_urls),
@@ -2232,7 +2439,7 @@ class main:
                 print(Fore.YELLOW + f"[~] {pkg} Delta key missing — fetching via HWID...")
                 self._handle_delta_bypass(pkg)
 
-            if self._is_ingame(pkg, uname):
+            if self._is_ingame({"package": pkg, "user_name": uname}):
                 self._set_status_by_packages(pkg, "Ingame")
             else:
                 if time.time() - last_launch > rejoin_timeout:
@@ -2269,7 +2476,7 @@ class main:
                     continue
 
                 pid = self.pkg_manager.get_pid(package)
-                hb_file = self.acc_manager.get_file_hb(user_name)
+                hb_file = self.acc_manager.get_file_hb(package) or self.acc_manager.get_file_hb(user_name)
 
                 if not pid:
                     cur_st = self.tabs_status[tab_index]["status"] if tab_index < len(self.tabs_status) else "Offline"
@@ -2362,6 +2569,7 @@ class main:
                 "game": t.get("link_id_game", "Unknown")
             })
 
+        # Auto block check
         if cfg.get("auto_block"):
             print(Fore.GREEN + "[+] Auto block is on, start auto block...")
             for pkg, t in enabled_tabs.items():
@@ -2372,6 +2580,7 @@ class main:
                     print(Fore.CYAN + f" [+] Found {len(blocked)} blocked users for {pkg}")
             print(Fore.GREEN + "[+] Auto block done")
 
+        # Auto buy private server
         if cfg.get("auto_buy_svv"):
             print(Fore.GREEN + "[+] Auto buy private server is on, start auto buy...")
             for pkg, t in enabled_tabs.items():
@@ -2391,8 +2600,10 @@ class main:
             self.config_manager.save_config(self.config_file, cfg)
             print(Fore.GREEN + "[+] Auto buy private done")
 
+        # Event tracking telemetry
         self.event_tracking()
 
+        # Auto sort tab if enabled
         if cfg.get("auto_sort_tab"):
             print(Fore.GREEN + "[+] Auto sort tab is on. Start auto sort tab...")
             if cfg.get("auto_sort_tab_full"):
@@ -2400,13 +2611,14 @@ class main:
             else:
                 self.pkg_manager.arrange_clone_windows(list(enabled_tabs.keys()))
 
+        # Setup Auto-execute for Blox Fruits if configured
         if cfg.get("auto_change_acc_bf"):
             script = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/g-huy128/Test/refs/heads/main/bf_change_acc.lua"))()'
             for pkg in enabled_tabs:
                 self.acc_manager.autoexecute(pkg, script)
 
         delay = cfg.get("delay_open_tab", 5)
-        check_method = cfg.get("account_check_method", "heartbeat")
+        check_method = cfg.get("account_check_method", "executor")
         rejoin_timeout = cfg.get("rejoin_timeout", 60)
         check_interval = cfg.get("check_interval", 5)
         check_ui_delay = cfg.get("check_ui_delay", 0)
@@ -2424,9 +2636,11 @@ class main:
 
         stop_event = threading.Event()
 
+        # Start account change watcher thread
         ca_thread = threading.Thread(target=self._change_account_loop, args=(enabled_tabs, stop_event), daemon=True)
         ca_thread.start()
 
+        # Start tab monitor threads
         monitor_threads = []
         for idx, (pkg, t) in enumerate(enabled_tabs.items()):
             t_copy = dict(t)
@@ -3032,20 +3246,12 @@ class main:
             time.sleep(1)
 
     def run(self):
-        # 1. Check auto-update (Offline bypassed)
+        # 1. Update check — BYPASSED
+        # 2. License — BYPASSED (always pass)
         try:
-            self.auto_updater.check_and_update()
+            self.license_manager.authenticate()
         except Exception:
             pass
-
-        # 2. Authenticate license (Offline bypassed)
-        try:
-            if not self.license_manager.authenticate():
-                print(Fore.RED + "[!] License authentication failed. Exiting.")
-                return
-            self.license_manager.start_watchdog()
-        except Exception as e:
-            print(Fore.YELLOW + f"[~] License check bypassed / offline mode: {e}")
 
         # 3. Initialize workspace
         self.config_manager.init_work_space()
